@@ -1,0 +1,11 @@
+H:\Documents\Devs\Rust\RustyLibraryShrinker\target\debug\deps\jpeg2k-95d8a58a33058b3f.d: C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jpeg2k-0.10.1\src\lib.rs C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jpeg2k-0.10.1\src\format.rs C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jpeg2k-0.10.1\src\error.rs C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jpeg2k-0.10.1\src\codec.rs C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jpeg2k-0.10.1\src\dump.rs C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jpeg2k-0.10.1\src\j2k_image.rs C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jpeg2k-0.10.1\src\stream.rs
+
+H:\Documents\Devs\Rust\RustyLibraryShrinker\target\debug\deps\libjpeg2k-95d8a58a33058b3f.rmeta: C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jpeg2k-0.10.1\src\lib.rs C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jpeg2k-0.10.1\src\format.rs C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jpeg2k-0.10.1\src\error.rs C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jpeg2k-0.10.1\src\codec.rs C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jpeg2k-0.10.1\src\dump.rs C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jpeg2k-0.10.1\src\j2k_image.rs C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jpeg2k-0.10.1\src\stream.rs
+
+C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jpeg2k-0.10.1\src\lib.rs:
+C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jpeg2k-0.10.1\src\format.rs:
+C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jpeg2k-0.10.1\src\error.rs:
+C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jpeg2k-0.10.1\src\codec.rs:
+C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jpeg2k-0.10.1\src\dump.rs:
+C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jpeg2k-0.10.1\src\j2k_image.rs:
+C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jpeg2k-0.10.1\src\stream.rs:

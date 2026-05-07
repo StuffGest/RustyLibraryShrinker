@@ -1,0 +1,11 @@
+H:\Documents\Devs\Rust\RustyLibraryShrinker\target\debug\deps\console-cce2ecf53674bca1.d: C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\console-0.16.3\src\lib.rs C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\console-0.16.3\src\common_term.rs C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\console-0.16.3\src\kb.rs C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\console-0.16.3\src\term.rs C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\console-0.16.3\src\utils.rs C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\console-0.16.3\src\windows_term\mod.rs C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\console-0.16.3\src\ansi.rs
+
+H:\Documents\Devs\Rust\RustyLibraryShrinker\target\debug\deps\libconsole-cce2ecf53674bca1.rmeta: C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\console-0.16.3\src\lib.rs C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\console-0.16.3\src\common_term.rs C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\console-0.16.3\src\kb.rs C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\console-0.16.3\src\term.rs C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\console-0.16.3\src\utils.rs C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\console-0.16.3\src\windows_term\mod.rs C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\console-0.16.3\src\ansi.rs
+
+C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\console-0.16.3\src\lib.rs:
+C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\console-0.16.3\src\common_term.rs:
+C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\console-0.16.3\src\kb.rs:
+C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\console-0.16.3\src\term.rs:
+C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\console-0.16.3\src\utils.rs:
+C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\console-0.16.3\src\windows_term\mod.rs:
+C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\console-0.16.3\src\ansi.rs:

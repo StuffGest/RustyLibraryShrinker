@@ -1,0 +1,8 @@
+H:\Documents\Devs\Rust\RustyLibraryShrinker\target\debug\deps\fluent_langneg-76f7041254c28309.d: C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\fluent-langneg-0.13.1\src\lib.rs C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\fluent-langneg-0.13.1\src\accepted_languages.rs C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\fluent-langneg-0.13.1\src\negotiate\mod.rs C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\fluent-langneg-0.13.1\src\negotiate\likely_subtags.rs
+
+H:\Documents\Devs\Rust\RustyLibraryShrinker\target\debug\deps\libfluent_langneg-76f7041254c28309.rmeta: C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\fluent-langneg-0.13.1\src\lib.rs C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\fluent-langneg-0.13.1\src\accepted_languages.rs C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\fluent-langneg-0.13.1\src\negotiate\mod.rs C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\fluent-langneg-0.13.1\src\negotiate\likely_subtags.rs
+
+C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\fluent-langneg-0.13.1\src\lib.rs:
+C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\fluent-langneg-0.13.1\src\accepted_languages.rs:
+C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\fluent-langneg-0.13.1\src\negotiate\mod.rs:
+C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\fluent-langneg-0.13.1\src\negotiate\likely_subtags.rs:

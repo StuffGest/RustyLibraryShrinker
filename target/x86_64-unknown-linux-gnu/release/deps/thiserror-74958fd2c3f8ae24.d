@@ -1,0 +1,14 @@
+/target/x86_64-unknown-linux-gnu/release/deps/thiserror-74958fd2c3f8ae24.d: /mnt/c/Users/HurtMarley/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/lib.rs /mnt/c/Users/HurtMarley/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/aserror.rs /mnt/c/Users/HurtMarley/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/display.rs /mnt/c/Users/HurtMarley/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/var.rs /mnt/c/Users/HurtMarley/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/private.rs /target/x86_64-unknown-linux-gnu/release/build/thiserror-5afd8b2072eaca00/out/private.rs
+
+/target/x86_64-unknown-linux-gnu/release/deps/libthiserror-74958fd2c3f8ae24.rlib: /mnt/c/Users/HurtMarley/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/lib.rs /mnt/c/Users/HurtMarley/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/aserror.rs /mnt/c/Users/HurtMarley/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/display.rs /mnt/c/Users/HurtMarley/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/var.rs /mnt/c/Users/HurtMarley/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/private.rs /target/x86_64-unknown-linux-gnu/release/build/thiserror-5afd8b2072eaca00/out/private.rs
+
+/target/x86_64-unknown-linux-gnu/release/deps/libthiserror-74958fd2c3f8ae24.rmeta: /mnt/c/Users/HurtMarley/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/lib.rs /mnt/c/Users/HurtMarley/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/aserror.rs /mnt/c/Users/HurtMarley/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/display.rs /mnt/c/Users/HurtMarley/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/var.rs /mnt/c/Users/HurtMarley/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/private.rs /target/x86_64-unknown-linux-gnu/release/build/thiserror-5afd8b2072eaca00/out/private.rs
+
+/mnt/c/Users/HurtMarley/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/lib.rs:
+/mnt/c/Users/HurtMarley/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/aserror.rs:
+/mnt/c/Users/HurtMarley/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/display.rs:
+/mnt/c/Users/HurtMarley/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/var.rs:
+/mnt/c/Users/HurtMarley/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/private.rs:
+/target/x86_64-unknown-linux-gnu/release/build/thiserror-5afd8b2072eaca00/out/private.rs:
+
+# env-dep:OUT_DIR=/target/x86_64-unknown-linux-gnu/release/build/thiserror-5afd8b2072eaca00/out

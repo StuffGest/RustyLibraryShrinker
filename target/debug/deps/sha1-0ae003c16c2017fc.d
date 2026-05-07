@@ -1,0 +1,11 @@
+H:\Documents\Devs\Rust\RustyLibraryShrinker\target\debug\deps\sha1-0ae003c16c2017fc.d: C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\sha1-0.11.0\src\lib.rs C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\sha1-0.11.0\src\block_api.rs C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\sha1-0.11.0\src\compress.rs C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\sha1-0.11.0\src\consts.rs C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\sha1-0.11.0\src\../README.md C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\sha1-0.11.0\src\compress\soft.rs C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\sha1-0.11.0\src\compress\x86_sha.rs
+
+H:\Documents\Devs\Rust\RustyLibraryShrinker\target\debug\deps\libsha1-0ae003c16c2017fc.rmeta: C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\sha1-0.11.0\src\lib.rs C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\sha1-0.11.0\src\block_api.rs C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\sha1-0.11.0\src\compress.rs C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\sha1-0.11.0\src\consts.rs C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\sha1-0.11.0\src\../README.md C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\sha1-0.11.0\src\compress\soft.rs C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\sha1-0.11.0\src\compress\x86_sha.rs
+
+C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\sha1-0.11.0\src\lib.rs:
+C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\sha1-0.11.0\src\block_api.rs:
+C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\sha1-0.11.0\src\compress.rs:
+C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\sha1-0.11.0\src\consts.rs:
+C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\sha1-0.11.0\src\../README.md:
+C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\sha1-0.11.0\src\compress\soft.rs:
+C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\sha1-0.11.0\src\compress\x86_sha.rs:

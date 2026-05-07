@@ -1,0 +1,11 @@
+/target/x86_64-unknown-linux-gnu/release/deps/bzip2-b8d19c5078154903.d: /mnt/c/Users/HurtMarley/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bzip2-0.6.1/src/lib.rs /mnt/c/Users/HurtMarley/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bzip2-0.6.1/src/mem.rs /mnt/c/Users/HurtMarley/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bzip2-0.6.1/src/bufread.rs /mnt/c/Users/HurtMarley/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bzip2-0.6.1/src/read.rs /mnt/c/Users/HurtMarley/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bzip2-0.6.1/src/write.rs
+
+/target/x86_64-unknown-linux-gnu/release/deps/libbzip2-b8d19c5078154903.rlib: /mnt/c/Users/HurtMarley/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bzip2-0.6.1/src/lib.rs /mnt/c/Users/HurtMarley/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bzip2-0.6.1/src/mem.rs /mnt/c/Users/HurtMarley/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bzip2-0.6.1/src/bufread.rs /mnt/c/Users/HurtMarley/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bzip2-0.6.1/src/read.rs /mnt/c/Users/HurtMarley/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bzip2-0.6.1/src/write.rs
+
+/target/x86_64-unknown-linux-gnu/release/deps/libbzip2-b8d19c5078154903.rmeta: /mnt/c/Users/HurtMarley/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bzip2-0.6.1/src/lib.rs /mnt/c/Users/HurtMarley/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bzip2-0.6.1/src/mem.rs /mnt/c/Users/HurtMarley/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bzip2-0.6.1/src/bufread.rs /mnt/c/Users/HurtMarley/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bzip2-0.6.1/src/read.rs /mnt/c/Users/HurtMarley/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bzip2-0.6.1/src/write.rs
+
+/mnt/c/Users/HurtMarley/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bzip2-0.6.1/src/lib.rs:
+/mnt/c/Users/HurtMarley/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bzip2-0.6.1/src/mem.rs:
+/mnt/c/Users/HurtMarley/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bzip2-0.6.1/src/bufread.rs:
+/mnt/c/Users/HurtMarley/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bzip2-0.6.1/src/read.rs:
+/mnt/c/Users/HurtMarley/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bzip2-0.6.1/src/write.rs:

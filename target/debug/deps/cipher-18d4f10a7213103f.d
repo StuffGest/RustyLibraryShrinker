@@ -1,0 +1,10 @@
+H:\Documents\Devs\Rust\RustyLibraryShrinker\target\debug\deps\cipher-18d4f10a7213103f.d: C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\cipher-0.4.4\src\lib.rs C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\cipher-0.4.4\src\block.rs C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\cipher-0.4.4\src\errors.rs C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\cipher-0.4.4\src\stream.rs C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\cipher-0.4.4\src\stream_core.rs C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\cipher-0.4.4\src\stream_wrapper.rs
+
+H:\Documents\Devs\Rust\RustyLibraryShrinker\target\debug\deps\libcipher-18d4f10a7213103f.rmeta: C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\cipher-0.4.4\src\lib.rs C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\cipher-0.4.4\src\block.rs C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\cipher-0.4.4\src\errors.rs C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\cipher-0.4.4\src\stream.rs C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\cipher-0.4.4\src\stream_core.rs C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\cipher-0.4.4\src\stream_wrapper.rs
+
+C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\cipher-0.4.4\src\lib.rs:
+C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\cipher-0.4.4\src\block.rs:
+C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\cipher-0.4.4\src\errors.rs:
+C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\cipher-0.4.4\src\stream.rs:
+C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\cipher-0.4.4\src\stream_core.rs:
+C:\Users\HurtMarley\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\cipher-0.4.4\src\stream_wrapper.rs:
