@@ -103,7 +103,6 @@ fn main() -> Result<()> {
 
     if comic_files.is_empty() {
         if args.glob_pattern.is_some() {
-            // Error message already printed in find_comic_files_by_glob
         } else {
             println!("No comic files found in the specified path.");
         }
@@ -154,7 +153,7 @@ fn main() -> Result<()> {
         match process_comic_file(comic_file, &args, &file_progress) {
             Ok(file_stats) => {
                 let mut stats_map = stats.lock().unwrap();
-                
+
                 if let Some(ref status) = file_stats.status_message {
                     file_progress.finish_with_message(format!("{} {} ({} processed, {} skipped)",
                         if status.contains("Format") { "⏭️" } else { "✅" },
@@ -166,11 +165,10 @@ fn main() -> Result<()> {
                     file_progress.finish_with_message(format!("✅ Compressed ({} processed, {} skipped)",
                         file_stats.images_processed, file_stats.images_skipped));
                 }
-                
+
                 stats_map.insert(comic_file.path.clone(), file_stats);
             }
             Err(e) => {
-                // Create error stats entry
                 let error_stats = ProcessingStats {
                     original_size: fs::metadata(&comic_file.path).map(|m| m.len()).unwrap_or(0),
                     compressed_size: 0,
@@ -181,10 +179,10 @@ fn main() -> Result<()> {
                     error_message: Some(e.to_string()),
                     status_message: None,
                 };
-                
+
                 let mut stats_map = stats.lock().unwrap();
                 stats_map.insert(comic_file.path.clone(), error_stats);
-                
+
                 file_progress.finish_with_message(format!("❌ Failed: {}", e));
             }
         }
@@ -234,18 +232,16 @@ fn find_comic_files(dir: &Path) -> Result<Vec<ComicFile>> {
 
 fn find_comic_files_by_glob(pattern: &str) -> Result<Vec<ComicFile>> {
     let mut comic_files = Vec::new();
-    
-    // Try the pattern as provided first
+
     let patterns_to_try = vec![
         pattern.to_string(),
-        // If pattern doesn't start with / or **, try making it recursive
         if !pattern.starts_with('/') && !pattern.starts_with("**") {
             format!("**/{}", pattern)
         } else {
             pattern.to_string()
         }
     ];
-    
+
     for pattern_attempt in patterns_to_try {
         for entry in glob(&pattern_attempt).context("Failed to read glob pattern")? {
             match entry {
@@ -257,12 +253,10 @@ fn find_comic_files_by_glob(pattern: &str) -> Result<Vec<ComicFile>> {
                     }
                 }
                 Err(_) => {
-                    // Silently skip glob pattern errors
                 }
             }
         }
-        
-        // If we found files with this pattern, don't try others
+
         if !comic_files.is_empty() {
             break;
         }
@@ -298,41 +292,26 @@ fn process_comic_file(
     let stats = process_images(&image_files, args, progress).with_context(|| "process_images failed")?;
     progress.set_position(80);
 
-    // Always create compressed file with temporary name first to avoid overwriting original
-    let temp_output_path = if args.rename_original {
+    let temp_output_path = {
         let parent = comic_file.path.parent().unwrap_or_else(|| Path::new("."));
         let stem = comic_file.path.file_stem().unwrap().to_string_lossy();
-        parent.join(format!("{}_temp_compressed.cbr", stem))
-    } else {
-        generate_output_path(&comic_file.path, args.quality, false)
+        parent.join(format!("{}_temp_compressed_file.cbz", stem))
     };
 
-    create_cbr_archive(temp_dir.path(), &temp_output_path, progress).with_context(|| "create_cbr_archive failed")?;
+    create_cbz_archive(temp_dir.path(), &temp_output_path, progress).with_context(|| "create_cbz_archive failed")?;
     progress.set_position(90);
 
     let compressed_size = fs::metadata(&temp_output_path)?.len();
 
-    // Calculate compression savings
     let savings_percent = if original_size > 0 {
         ((original_size as f64 - compressed_size as f64) / original_size as f64) * 100.0
     } else {
         0.0
     };
 
-    // Check if compression provides significant benefit
-    // If no images were processed (all skipped), keep archive as format conversion
-    // If --skip-compression, never skip (always create output)
-    // If images were processed (WebP converted), always create output regardless of size
-    let compression_skipped = if args.skip_compression {
-        false
-    } else if stats.0 > 0 {
-        false
-    } else {
-        savings_percent < args.min_savings
-    };
+    let compression_skipped = savings_percent < args.min_savings;
 
     if compression_skipped {
-        // Remove the compressed file and keep original
         fs::remove_file(&temp_output_path)
             .context("Failed to remove temporary compressed file")?;
 
@@ -340,7 +319,7 @@ fn process_comic_file(
 
         return Ok(ProcessingStats {
             original_size,
-            compressed_size: original_size, // No compression applied
+            compressed_size: original_size,
             images_processed: stats.0,
             images_skipped: stats.1,
             compression_skipped: true,
@@ -350,7 +329,6 @@ fn process_comic_file(
         });
     }
 
-    // Handle renaming if requested and compression was beneficial
     let final_output_path = if args.rename_original {
         let original_path = &comic_file.path;
         let original_extension = original_path.extension()
@@ -360,19 +338,20 @@ fn process_comic_file(
         let parent = original_path.parent().unwrap_or_else(|| Path::new("."));
         let stem = original_path.file_stem().unwrap().to_string_lossy();
         let backup_path = parent.join(format!("{}_original.{}", stem, original_extension));
-        let final_compressed_path = parent.join(format!("{}.cbr", stem));
+        let final_compressed_path = parent.join(format!("{}.cbz", stem));
 
-        // Rename original file to backup name
         fs::rename(original_path, &backup_path)
             .context("Failed to rename original file")?;
 
-        // Rename compressed file to original name
         fs::rename(&temp_output_path, &final_compressed_path)
             .context("Failed to rename compressed file")?;
 
         final_compressed_path
     } else {
-        temp_output_path.clone()
+        let actual_output_path = generate_output_path(&comic_file.path, args.quality, false);
+        fs::rename(&temp_output_path, &actual_output_path)
+            .context("Failed to move compressed file to final destination")?;
+        actual_output_path
     };
 
     progress.set_position(100);
@@ -385,11 +364,7 @@ fn process_comic_file(
         compression_skipped: false,
         output_path: Some(final_output_path),
         error_message: None,
-        status_message: if stats.0 > 0 {
-            None
-        } else {
-            Some("Format conversion (no recompression)".to_string())
-        },
+        status_message: None,
     })
 }
 
@@ -399,7 +374,6 @@ fn extract_comic(comic_file: &ComicFile, temp_dir: &Path, _progress: &ProgressBa
             extract_zip_archive(&comic_file.path, temp_dir)?;
         }
         ComicType::Cbr => {
-            // Try RAR first, fallback to ZIP if it fails (some CBR files are actually ZIP)
             if let Err(_) = extract_rar_archive(&comic_file.path, temp_dir) {
                 extract_zip_archive(&comic_file.path, temp_dir)
                     .context("Failed to extract CBR file as both RAR and ZIP")?;
@@ -428,7 +402,6 @@ fn extract_epub_archive(epub_path: &Path, temp_dir: &Path) -> Result<()> {
         }
     };
 
-    // Extract src attributes from XHTML/HTML content.
     fn extract_src_attrs(content: &str) -> Vec<String> {
         let mut results = Vec::new();
         let lower = content.to_lowercase();
@@ -466,18 +439,14 @@ fn extract_epub_archive(epub_path: &Path, temp_dir: &Path) -> Result<()> {
         xhtml_content: Option<String>,
     }
 
-    /// Try to find a resource by resolving a src reference against the spine
-    /// item's resource path.
     fn find_resource<'a>(
         src: &str,
         spine_resource_path: &std::path::PathBuf,
         resources: &'a std::collections::HashMap<String, epub::doc::ResourceItem>,
     ) -> Option<&'a epub::doc::ResourceItem> {
-        // Try exact path match first
         if let Some(r) = resources.get(src) {
             return Some(r);
         }
-        // Try resolving relative to spine resource directory
         let base_dir = spine_resource_path.parent().map(|p| p.to_string_lossy().to_string());
         if let Some(dir) = base_dir {
             let resolved = if src.starts_with('/') {
@@ -489,7 +458,6 @@ fn extract_epub_archive(epub_path: &Path, temp_dir: &Path) -> Result<()> {
                 return Some(r);
             }
         }
-        // Fallback: match by basename only
         if let Some(basename) = std::path::Path::new(src).file_name() {
             for (_id, r) in resources {
                 if r.path.file_name().map(|n| n == basename).unwrap_or(false) {
@@ -500,7 +468,6 @@ fn extract_epub_archive(epub_path: &Path, temp_dir: &Path) -> Result<()> {
         None
     }
 
-    // Phase 1a: Collect spine IDs and image info (immutable phase)
     let mut spine_image_info = Vec::new();
     for item in &doc.spine {
         let idref = &item.idref;
@@ -520,9 +487,7 @@ fn extract_epub_archive(epub_path: &Path, temp_dir: &Path) -> Result<()> {
         };
         spine_image_info.push((idref.clone(), is_image, image_path, image_ext));
     }
-    // End immutable phase — `doc.spine` and `doc.resources` borrows released
 
-    // Phase 1b: Fetch XHTML content for non-image spine items
     let entries: Vec<SpineEntry> = spine_image_info.into_iter().map(|(idref, is_image, image_path, image_ext)| {
         let xhtml_content = if is_image {
             None
@@ -540,7 +505,6 @@ fn extract_epub_archive(epub_path: &Path, temp_dir: &Path) -> Result<()> {
         }
     }).collect();
 
-    // Phase 2: Collect images in reading order (doc is no longer borrowed immutably)
     let mut seen = std::collections::HashSet::new();
     let mut images: Vec<ImageRef> = Vec::new();
 
@@ -557,7 +521,6 @@ fn extract_epub_archive(epub_path: &Path, temp_dir: &Path) -> Result<()> {
             continue;
         }
 
-        // Parse XHTML content for <img src="..."> refs
         if let Some(ref content) = entry.xhtml_content {
             let srcs = extract_src_attrs(content);
             let spine_res_path = doc.resources
@@ -581,7 +544,6 @@ fn extract_epub_archive(epub_path: &Path, temp_dir: &Path) -> Result<()> {
         }
     }
 
-    // Fallback: no spine images — use all image resources from the manifest
     if images.is_empty() {
         let mut all: Vec<ImageRef> = doc.resources.iter()
             .filter_map(|(_id, resource)| {
@@ -596,7 +558,6 @@ fn extract_epub_archive(epub_path: &Path, temp_dir: &Path) -> Result<()> {
                 }
             })
             .collect();
-        // Sort by path for deterministic ordering
         all.sort_by(|a, b| a.path.cmp(&b.path));
         for img in all {
             if seen.insert(img.path.clone()) {
@@ -605,7 +566,6 @@ fn extract_epub_archive(epub_path: &Path, temp_dir: &Path) -> Result<()> {
         }
     }
 
-    // Now extract images in order
     let mut image_count = 0u32;
     for img in &images {
         image_count += 1;
@@ -639,7 +599,6 @@ fn extract_zip_archive(archive_path: &Path, temp_dir: &Path) -> Result<()> {
             fs::create_dir_all(parent)?;
         }
 
-        // Skip directories - they are created by create_dir_all above
         if file.name().ends_with('/') {
             continue;
         }
@@ -661,7 +620,6 @@ fn extract_rar_archive(archive_path: &Path, temp_dir: &Path) -> Result<()> {
     loop {
         match current_archive.read_header() {
             Ok(Some(archive_with_header)) => {
-                // Extract the current file to the temp directory
                 let archive_after_extract = archive_with_header
                     .extract_with_base(temp_dir)
                     .map_err(|e| anyhow::anyhow!("Failed to extract RAR entry: {:?}", e))?;
@@ -669,7 +627,6 @@ fn extract_rar_archive(archive_path: &Path, temp_dir: &Path) -> Result<()> {
                 current_archive = archive_after_extract;
             }
             Ok(None) => {
-                // No more files in the archive
                 break;
             }
             Err(e) => {
@@ -689,7 +646,6 @@ fn extract_pdf_archive(pdf_path: &Path, temp_dir: &Path) -> Result<()> {
 
     let pages = doc.get_pages();
 
-    // Decode a JP2 or standard image file into an RgbImage
     fn decode_to_rgb(path: &Path) -> Result<image::RgbImage> {
         if path.extension().and_then(|e| e.to_str()).map(|e| e.eq_ignore_ascii_case("jp2")).unwrap_or(false) {
             let jp2 = jpeg2k::Image::from_file(path)
@@ -710,7 +666,6 @@ fn extract_pdf_archive(pdf_path: &Path, temp_dir: &Path) -> Result<()> {
         }
     }
 
-    // Decode a JP2 or standard image as grayscale (used for SMask alpha)
     fn decode_to_luma(path: &Path) -> Result<image::GrayImage> {
         if path.extension().and_then(|e| e.to_str()).map(|e| e.eq_ignore_ascii_case("jp2")).unwrap_or(false) {
             let jp2 = jpeg2k::Image::from_file(path)
@@ -735,11 +690,6 @@ fn extract_pdf_archive(pdf_path: &Path, temp_dir: &Path) -> Result<()> {
         }
     }
 
-    // Porter-Duff OVER: result = overlay * a + base * (1 - a).
-    // PDF SMask semantics: alpha=1 → overlay opaque (replaces base),
-    // alpha=0 → overlay transparent (base shows). For IA's MRC pages, the
-    // JBIG2 mask is binary: 255 where the foreground layer (ink/text)
-    // should show, 0 where the background (photo) should show.
     fn composite_over(base: &mut image::RgbImage, overlay: &image::RgbImage, alpha: &image::GrayImage) {
         let (w, h) = (base.width(), base.height());
         for y in 0..h {
@@ -761,16 +711,12 @@ fn extract_pdf_archive(pdf_path: &Path, temp_dir: &Path) -> Result<()> {
         }
     }
 
-    // Extract a stream to a file; returns empty PathBuf for unsupported filters.
     fn extract_stream(stream: &lopdf::Stream, doc: &Document, temp_dir: &Path, ref_id: &(u32, u16)) -> Result<PathBuf> {
         let base = format!("img_{:04}_{:04}", ref_id.0, ref_id.1);
         let (path, _) = extract_image_from_stream_to(stream, doc, temp_dir, ref_id, &base)?;
         Ok(path)
     }
 
-    // Decode a JBIG2-encoded stream (PDF-embedded, no file header) into a binary GrayImage.
-    // PDF embeds JBIG2 using the "embedded" organization defined in Annex D.3.
-    // Returns None if decoding fails (caller will skip compositing and use base alone).
     fn decode_jbig2_mask(data: &[u8], width: u32, height: u32) -> Option<image::GrayImage> {
         struct LumaDecoder {
             buf: Vec<u8>,
@@ -790,7 +736,6 @@ fn extract_pdf_archive(pdf_path: &Path, temp_dir: &Path) -> Result<()> {
         let (pw, ph) = (img.width(), img.height());
         let mut dec = LumaDecoder { buf: Vec::with_capacity((pw * ph) as usize) };
         img.decode(&mut dec).ok()?;
-        // The decoder may emit trailing pad bytes past image width; truncate.
         dec.buf.truncate((pw * ph) as usize);
         let gray = image::GrayImage::from_raw(pw, ph, dec.buf)?;
         if pw != width || ph != height {
@@ -801,7 +746,6 @@ fn extract_pdf_archive(pdf_path: &Path, temp_dir: &Path) -> Result<()> {
     }
 
     for (page_num, (_, page_object_id)) in pages.iter().enumerate() {
-        // Collect: (name, image_ref, optional_smask_ref) for non-SMask images, sorted by name
         let mut smask_ref_ids: std::collections::HashSet<(u32, u16)> = std::collections::HashSet::new();
         let mut layers: Vec<(String, (u32, u16), Option<(u32, u16)>)> = Vec::new();
 
@@ -841,7 +785,6 @@ fn extract_pdf_archive(pdf_path: &Path, temp_dir: &Path) -> Result<()> {
         let output_num = page_num + 1;
         let out_path = temp_dir.join(format!("page_{:04}.png", output_num));
 
-        // Decode all layers and composite bottom-to-top
         let mut composite: Option<image::RgbImage> = None;
 
         for (_, ref_id, smask_ref) in &layers {
@@ -855,7 +798,6 @@ fn extract_pdf_archive(pdf_path: &Path, temp_dir: &Path) -> Result<()> {
 
             let (w, h) = (layer_rgb.width(), layer_rgb.height());
 
-            // Get alpha mask for this layer (if it has an SMask)
             let alpha: Option<image::GrayImage> = if let Some(smask_id) = smask_ref {
                 if let Ok(Object::Stream(smask_stream)) = doc.get_object(*smask_id) {
                     let filter = smask_stream.dict.get(b"Filter").ok()
@@ -865,7 +807,6 @@ fn extract_pdf_archive(pdf_path: &Path, temp_dir: &Path) -> Result<()> {
                             decode_jbig2_mask(&smask_stream.content, w, h)
                         }
                         _ => {
-                            // Try extracting via the normal path (JPXDecode etc.)
                             let path = extract_stream(&smask_stream, &doc, temp_dir, smask_id)?;
                             if path == PathBuf::new() { None } else {
                                 let gray = decode_to_luma(&path).ok();
@@ -879,21 +820,17 @@ fn extract_pdf_archive(pdf_path: &Path, temp_dir: &Path) -> Result<()> {
 
             match (&mut composite, alpha) {
                 (None, None) => {
-                    // Base layer, fully opaque — use directly
                     composite = Some(layer_rgb);
                 }
                 (None, Some(alpha)) => {
-                    // Base layer with mask: composite over white
                     let mut base = image::RgbImage::from_pixel(w, h, image::Rgb([255u8, 255, 255]));
                     composite_over(&mut base, &layer_rgb, &alpha);
                     composite = Some(base);
                 }
                 (Some(ref mut base), None) => {
-                    // Overlay, fully opaque — paint over base entirely
                     *base = layer_rgb;
                 }
                 (Some(ref mut base), Some(alpha)) => {
-                    // Overlay with mask: composite over existing base
                     let (bw, bh) = (base.width(), base.height());
                     let layer_rgb = if layer_rgb.width() != bw || layer_rgb.height() != bh {
                         image::imageops::resize(&layer_rgb, bw, bh, image::imageops::FilterType::Lanczos3)
@@ -923,7 +860,6 @@ fn extract_image_from_stream_to(
 ) -> Result<(PathBuf, usize)> {
     use lopdf::Object;
 
-    // Get image properties
     let width = stream.dict.get(b"Width")
         .ok()
         .and_then(|obj| obj.as_i64().ok())
@@ -939,7 +875,6 @@ fn extract_image_from_stream_to(
         .and_then(|obj| obj.as_i64().ok())
         .unwrap_or(8) as u32;
 
-    // Check the filter to determine image format
     if let Ok(Object::Name(filter)) = stream.dict.get(b"Filter") {
         match filter.as_slice() {
             b"DCTDecode" => {
@@ -960,7 +895,6 @@ fn extract_image_from_stream_to(
                 let output_path = temp_dir.join(format!("{}.jp2", base_name));
                 fs::write(&output_path, &stream.content)
                     .map_err(|e| anyhow::anyhow!("Failed to save JPEG 2000 image: {:?}", e))?;
-                // Extract ICC profile if present
                 extract_icc_profile_to(stream, _doc, temp_dir, base_name)?;
                 return Ok((output_path, 0));
             }
@@ -969,7 +903,6 @@ fn extract_image_from_stream_to(
             }
         }
     } else {
-        // No filter - raw image data
         extract_raw_image(stream, temp_dir, base_name, width as u32, height as u32, bits_per_component)?;
         let output_path = temp_dir.join(format!("{}.png", base_name));
         return Ok((output_path, 0));
@@ -1122,7 +1055,6 @@ fn extract_icc_profile_to(
         }
     }
 
-    // Also check for simple reference
     if let Ok(Object::Reference(colorspace_ref)) = stream.dict.get(b"ColorSpace") {
         if let Ok(Object::Name(name)) = doc.get_object(*colorspace_ref) {
             if name.as_slice() == b"ICCBased" {
@@ -1184,7 +1116,6 @@ fn process_images(
 
             let current = *processed_clone.lock().unwrap() + *skipped_clone.lock().unwrap();
             let progress_percent = 30 + ((current * 50) / total_images);
-            // Only update progress every 10% to reduce output noise, plus important milestones
             if progress_percent % 10 == 0 || current == total_images || progress_percent >= 80 {
                 progress_clone.set_position(progress_percent as u64);
             }
@@ -1196,7 +1127,7 @@ fn process_images(
         match &result {
             Err(e) => {
                 if args.verbose {
-                    eprintln!("Warning: Failed to process image {}: {}. Skipping...", 
+                    eprintln!("Warning: Failed to process image {}: {}. Skipping...",
                               image_path.display(), e);
                 }
                 sender.send((image_path.clone(), false)).unwrap();
@@ -1217,12 +1148,10 @@ fn process_images(
 }
 
 fn process_single_image(image_path: &Path, args: &Args) -> Result<()> {
-    // Skip compression: keep image as-is
     if args.skip_compression {
         return Ok(());
     }
 
-    // Handle JPEG 2000 files with ICC profile color management
     if image_path.extension()
         .and_then(|e| e.to_str())
         .map(|e| e.to_lowercase() == "jp2")
@@ -1236,7 +1165,6 @@ fn process_single_image(image_path: &Path, args: &Args) -> Result<()> {
         let (rgb_data, width, height) = match pixels.data {
             jpeg2k::ImagePixelData::Rgb8(data) => (data, pixels.width, pixels.height),
             jpeg2k::ImagePixelData::Rgba8(data) => {
-                // Convert RGBA to RGB (strip alpha)
                 let mut rgb = Vec::with_capacity(pixels.width as usize * pixels.height as usize * 3);
                 for i in (0..data.len()).step_by(4) {
                     if i + 2 < data.len() {
@@ -1248,25 +1176,21 @@ fn process_single_image(image_path: &Path, args: &Args) -> Result<()> {
                 (rgb, pixels.width, pixels.height)
             }
             jpeg2k::ImagePixelData::L8(data) => {
-                // Grayscale: keep as-is (no color profile needed)
                 let img = image::DynamicImage::ImageLuma8(
                     image::GrayImage::from_raw(pixels.width, pixels.height, data.clone())
                         .ok_or_else(|| anyhow::anyhow!("Failed to create grayscale image from JPEG 2000 data"))?
                 );
                 let webp_path = image_path.with_extension("webp");
                 let webp_bytes = encode_webp(&img, args.quality)?;
-                if webp_bytes.len() < fs::metadata(image_path)?.len() as usize {
-                    fs::write(&webp_path, webp_bytes)?;
-                    fs::remove_file(image_path)?;
-                }
+                fs::write(&webp_path, webp_bytes)?;
+                fs::remove_file(image_path)?;
                 return Ok(());
             }
             _ => {
-                return Ok(()); // Unsupported format, keep as-is
+                return Ok(());
             }
         };
 
-        // Try to apply ICC profile for color management
         let icc_path = image_path.with_extension("icc");
         let rgb_data = if icc_path.exists() {
             let icc_data = fs::read(&icc_path)
@@ -1295,11 +1219,9 @@ fn process_single_image(image_path: &Path, args: &Args) -> Result<()> {
             }
             transformed
         } else {
-            // No ICC profile: assume sRGB (standard assumption for WebP)
             rgb_data
         };
 
-        // Clean up ICC profile file
         let _ = fs::remove_file(&icc_path);
 
         let img = image::DynamicImage::ImageRgb8(
@@ -1310,10 +1232,9 @@ fn process_single_image(image_path: &Path, args: &Args) -> Result<()> {
         let webp_path = image_path.with_extension("webp");
         let webp_bytes = encode_webp(&img, args.quality)?;
 
-        // Always produce WebP for JP2 files (ICC color management takes priority over size)
         fs::write(&webp_path, webp_bytes)?;
         fs::remove_file(image_path)?;
-        return Ok(()); // Converted to WebP (counts as processed)
+        return Ok(());
     }
 
     let img = ImageReader::open(image_path)?.decode()?;
@@ -1322,11 +1243,7 @@ fn process_single_image(image_path: &Path, args: &Args) -> Result<()> {
     let aspect_ratio = width as f32 / height as f32;
 
     let new_height = args.target_height;
-    let new_width = if aspect_ratio > 1.3 {
-        (new_height as f32 * aspect_ratio) as u32
-    } else {
-        (new_height as f32 * aspect_ratio) as u32
-    };
+    let new_width = (new_height as f32 * aspect_ratio) as u32;
 
     let resized = img.resize(new_width, new_height, image::imageops::FilterType::Lanczos3);
 
@@ -1334,13 +1251,9 @@ fn process_single_image(image_path: &Path, args: &Args) -> Result<()> {
 
     let webp_bytes = encode_webp(&resized, args.quality)?;
 
-    if webp_bytes.len() < fs::metadata(image_path)?.len() as usize {
-        fs::write(&webp_path, webp_bytes)?;
-        fs::remove_file(image_path)?;
-        Ok(())
-    } else {
-        Err(anyhow::anyhow!("WebP compression didn't reduce file size"))
-    }
+    fs::write(&webp_path, webp_bytes)?;
+    fs::remove_file(image_path)?;
+    Ok(())
 }
 
 fn encode_webp(img: &image::DynamicImage, quality: u8) -> Result<Vec<u8>> {
@@ -1353,7 +1266,7 @@ fn encode_webp(img: &image::DynamicImage, quality: u8) -> Result<Vec<u8>> {
     Ok(encoded.to_vec())
 }
 
-fn create_cbr_archive(temp_dir: &Path, output_path: &Path, _progress: &ProgressBar) -> Result<()> {
+fn create_cbz_archive(temp_dir: &Path, output_path: &Path, _progress: &ProgressBar) -> Result<()> {
     let file = File::create(output_path)?;
     let mut zip = ZipWriter::new(file);
     let options = FileOptions::<()>::default().compression_method(zip::CompressionMethod::Deflated);
@@ -1376,13 +1289,11 @@ fn create_cbr_archive(temp_dir: &Path, output_path: &Path, _progress: &ProgressB
 fn generate_output_path(input_path: &Path, quality: u8, rename_original: bool) -> PathBuf {
     let parent = input_path.parent().unwrap_or_else(|| Path::new("."));
     let stem = input_path.file_stem().unwrap().to_string_lossy();
-    
+
     if rename_original {
-        // When renaming original, compressed file gets the original name (but as .cbr)
-        parent.join(format!("{}.cbr", stem))
+        parent.join(format!("{}.cbz", stem))
     } else {
-        // Traditional naming with suffix
-        parent.join(format!("{} optimized_webp_q{}.cbr", stem, quality))
+        parent.join(format!("{} optimized_webp_q{}.cbz", stem, quality))
     }
 }
 
@@ -1409,26 +1320,17 @@ fn print_summary(stats: &HashMap<PathBuf, ProcessingStats>) {
         let name = path.file_name().unwrap().to_string_lossy().to_string();
 
         if stat.compression_skipped {
-            if stat.images_processed == 0 && stat.images_skipped == 0 && stat.original_size > 0 {
-                println!("  ⏭️  {} — No images found", name);
-            } else if stat.images_processed == 0 && stat.images_skipped > 0 {
-                let compressed_mb = stat.compressed_size as f64 / 1_048_576.0;
-                println!("  ⏭️  {} — {} images kept as originals ({} MB → {:.1} MB)",
-                    name, stat.images_skipped,
-                    stat.original_size as f64 / 1_048_576.0, compressed_mb);
-            } else {
-                let savings_pct = if stat.original_size > 0 {
-                    ((stat.original_size as f64 - stat.compressed_size as f64) / stat.original_size as f64) * 100.0
-                } else { 0.0 };
-                println!("  ⏭️  {} — Savings {:.1}% below threshold ({:.1} MB → {:.1} MB, {} processed, {} skipped)",
-                    name, savings_pct,
-                    stat.original_size as f64 / 1_048_576.0,
-                    stat.compressed_size as f64 / 1_048_576.0,
-                    stat.images_processed, stat.images_skipped);
-            }
+            let savings_pct = if stat.original_size > 0 {
+                ((stat.original_size as f64 - stat.compressed_size as f64) / stat.original_size as f64) * 100.0
+            } else { 0.0 };
+            println!("  ⏭️  {} — skipped — compression offered no benefit ({:.1}% savings, {:.1} MB → {:.1} MB)",
+                name, savings_pct,
+                stat.original_size as f64 / 1_048_576.0,
+                stat.compressed_size as f64 / 1_048_576.0);
+
             files_status_skipped += 1;
             total_original += stat.original_size;
-            total_compressed += stat.compressed_size;
+            total_compressed += stat.original_size;
             total_images += stat.images_processed;
             total_skipped += stat.images_skipped;
         } else if let Some(ref status) = stat.status_message {
@@ -1450,23 +1352,14 @@ fn print_summary(stats: &HashMap<PathBuf, ProcessingStats>) {
         } else {
             let savings_pct = if stat.original_size > stat.compressed_size {
                 ((stat.original_size - stat.compressed_size) as f64 / stat.original_size as f64) * 100.0
-            } else if stat.original_size == stat.compressed_size {
-                0.0
-            } else {
-                -((stat.compressed_size - stat.original_size) as f64 / stat.original_size as f64) * 100.0
-            };
+            } else { 0.0 };
             let output_name = stat.output_path
                 .as_ref()
                 .map(|p| p.file_name().unwrap().to_string_lossy().to_string())
                 .unwrap_or_else(|| "unknown".to_string());
-            let diff_mb = if stat.original_size >= stat.compressed_size {
-                (stat.original_size - stat.compressed_size) as f64 / 1_048_576.0
-            } else {
-                -((stat.compressed_size - stat.original_size) as f64 / 1_048_576.0)
-            };
-            println!("  ✅ {} — {:.1}% savings ({:.1} MB {}, {} processed, {} skipped)",
-                name, savings_pct, diff_mb.abs(),
-                if diff_mb >= 0.0 { "saved" } else { "overhead" },
+            let diff_mb = (stat.original_size as f64 - stat.compressed_size as f64) / 1_048_576.0;
+            println!("  ✅ {} — {:.1}% savings ({:.1} MB saved, {} processed, {} skipped)",
+                name, savings_pct, diff_mb,
                 stat.images_processed, stat.images_skipped);
             println!("     → {}", output_name);
             files_compressed += 1;
@@ -1500,7 +1393,7 @@ fn print_summary(stats: &HashMap<PathBuf, ProcessingStats>) {
     println!("    Skipped:    {}", total_skipped);
 
     println!("\n  ── Size ──");
-    let total_savings_mb = (total_original - total_compressed) as f64 / 1_048_576.0;
+    let total_savings_mb = (total_original as f64 - total_compressed as f64) / 1_048_576.0;
     println!("    Original:    {:.2} MB", total_original as f64 / 1_048_576.0);
     println!("    Compressed:  {:.2} MB", total_compressed as f64 / 1_048_576.0);
     if total_original > total_compressed {
