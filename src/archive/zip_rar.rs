@@ -1,11 +1,10 @@
 use anyhow::Result;
 use std::fs::{self, File};
-use std::io::{BufReader, Write};
+use std::io::{BufReader};
 use std::path::Path;
 use walkdir::WalkDir;
 use zip::{write::FileOptions, ZipWriter};
 
-/// Extrait une archive ZIP vers un répertoire temporaire
 pub fn extract_zip(archive_path: &Path, temp_dir: &Path) -> Result<()> {
     let file = File::open(archive_path)?;
     let reader = BufReader::new(file);
@@ -29,7 +28,6 @@ pub fn extract_zip(archive_path: &Path, temp_dir: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Extrait une archive RAR vers un répertoire temporaire
 pub fn extract_rar(archive_path: &Path, temp_dir: &Path) -> Result<()> {
     let archive = unrar::Archive::new(archive_path)
         .open_for_processing()
@@ -49,23 +47,33 @@ pub fn extract_rar(archive_path: &Path, temp_dir: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Crée une archive CBZ (ZIP) à partir d'un répertoire
 pub fn create_cbz(source_dir: &Path, output_path: &Path) -> Result<()> {
     let file = File::create(output_path)?;
     let mut zip = ZipWriter::new(file);
     let options = FileOptions::<()>::default()
-        .compression_method(zip::CompressionMethod::Deflated);
+        .compression_method(zip::CompressionMethod::Stored);
 
-    for entry in WalkDir::new(source_dir).into_iter().filter_map(|e| e.ok()) {
-        if entry.file_type().is_file() {
-            let path = entry.path();
-            let name = path.strip_prefix(source_dir)?;
+    let mut entries: Vec<_> = WalkDir::new(source_dir)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().is_file())
+        .collect();
 
-            zip.start_file(name.to_string_lossy(), options)?;
-            let content = fs::read(path)?;
-            zip.write_all(&content)?;
+    // TRI ALPHABÉTIQUE OBLIGATOIRE
+    entries.sort_by(|a, b| a.file_name().cmp(&b.file_name()));
+
+    for entry in entries {
+        let path = entry.path();
+        let name = path.file_name().unwrap().to_string_lossy();
+
+        // On n'ajoute que les images (qui sont maintenant en .webp après traitement)
+        if name.ends_with(".webp") {
+            zip.start_file(name, options)?;
+            let mut f = File::open(path)?;
+            std::io::copy(&mut f, &mut zip)?;
         }
     }
+
     zip.finish()?;
     Ok(())
 }
