@@ -1,1412 +1,180 @@
+mod models;
+mod image_utils;
+mod archive;
+mod processor;
+
 use anyhow::{Context, Result};
 use clap::Parser;
-use crossbeam_channel::{bounded, Receiver, Sender};
-use glob::glob;
-use image::ImageReader;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use rayon::prelude::*;
 use std::collections::HashMap;
-use std::fs::{self, File};
-use std::io::{BufReader, Write};
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use std::thread;
 use walkdir::WalkDir;
-use zip::{write::FileOptions, ZipWriter};
 
-#[derive(Parser)]
-#[command(author, version, about = "Compress comic book files (CBR/CBZ/PDF/EPUB) with parallel processing", long_about = None)]
-struct Args {
-    /// Input file or directory to process. If directory, processes all comic files
-    #[arg(value_name = "INPUT")]
-    input: Option<PathBuf>,
-
-    /// WebP quality (1-100, default: 90)
-    #[arg(short, long, default_value = "90")]
-    quality: u8,
-
-    /// Target height for images (default: 1800)
-    #[arg(short = 'H', long, default_value = "1800")]
-    target_height: u32,
-
-    /// Maximum dimension for fallback (default: 1200)
-    #[arg(short, long, default_value = "1200")]
-    max_dimension: u32,
-
-    /// Rename original file to <name>_original.<ext> and give compressed file the original name
-    #[arg(short, long)]
-    rename_original: bool,
-
-    /// Glob pattern for file selection (e.g., "ABC*.cbr")
-    #[arg(short, long)]
-    glob_pattern: Option<String>,
-
-    /// Minimum compression savings required to keep compressed file (default: 5%)
-    #[arg(long, default_value = "5.0")]
-    min_savings: f64,
-
-    /// Enable verbose output with detailed warnings
-    #[arg(short, long)]
-    verbose: bool,
-
-    /// Skip image compression - keep original images, just convert format
-    #[arg(short = 'S', long)]
-    skip_compression: bool,
-}
-
-#[derive(Debug)]
-struct ComicFile {
-    path: PathBuf,
-    file_type: ComicType,
-}
-
-#[derive(Debug)]
-enum ComicType {
-    Cbz,
-    Cbr,
-    Pdf,
-    Epub,
-}
-
-#[derive(Debug)]
-struct ProcessingStats {
-    original_size: u64,
-    compressed_size: u64,
-    images_processed: usize,
-    images_skipped: usize,
-    compression_skipped: bool,
-    output_path: Option<PathBuf>,
-    error_message: Option<String>,
-    status_message: Option<String>,
-}
+use crate::models::{Args, ComicFile, ComicType, ProcessingStats};
 
 fn main() -> Result<()> {
     let args = Args::parse();
 
-    if args.quality < 1 || args.quality > 100 {
-        anyhow::bail!("Quality must be between 1 and 100");
-    }
-
+    // On détermine le dossier de base (Mangas/ ou le dossier courant ".")
     let input_path = args.input.clone().unwrap_or_else(|| PathBuf::from("."));
 
-    if !input_path.exists() {
-        anyhow::bail!("Input path does not exist: {}", input_path.display());
-    }
-
-    let comic_files = if let Some(pattern) = &args.glob_pattern {
-        find_comic_files_by_glob(pattern)?
+    // 1. Découverte des fichiers avec correction de la récursion Glob
+    let files = if let Some(pattern) = &args.glob_pattern {
+        let full_pattern = if input_path.is_dir() {
+            // Si le pattern ne contient pas de marqueur de récursion, on l'ajoute
+            // pour scanner les sous-dossiers comme le faisait WalkDir.
+            if !pattern.contains("**") {
+                let mut p = input_path.clone();
+                p.push("**");
+                p.push(pattern);
+                p.to_string_lossy().into_owned()
+            } else {
+                let mut p = input_path.clone();
+                p.push(pattern);
+                p.to_string_lossy().into_owned()
+            }
+        } else {
+            pattern.clone()
+        };
+        find_by_glob(&full_pattern)?
     } else if input_path.is_file() {
-        vec![detect_comic_file(&input_path)?]
+        vec![detect_type(&input_path)?]
     } else {
-        find_comic_files(&input_path)?
+        find_in_dir(&input_path)?
     };
 
-    if comic_files.is_empty() {
-        if args.glob_pattern.is_some() {
-        } else {
-            println!("No comic files found in the specified path.");
-        }
+    if files.is_empty() {
+        println!("❌ Aucun fichier trouvé pour le chemin : {:?}", input_path);
         return Ok(());
     }
 
-    if args.verbose {
-        println!("📁 Found files:");
-        for file in &comic_files {
-            println!("   - {}", file.path.display());
-        }
-        println!();
-    }
-
-    println!("🚀 Found {} comic file(s) to process", comic_files.len());
-    if args.skip_compression {
-        println!("Mode: Format conversion (no image compression)");
-    } else {
-        println!(
-            "Settings: Quality={}, Target Height={}px",
-            args.quality, args.target_height
-        );
-    }
+    println!("🚀 RustyLibraryShrinker : {} fichier(s) à traiter", files.len());
     println!("-----------------------------------------------------");
 
-    let multi_progress = Arc::new(MultiProgress::new());
-    let overall_progress = multi_progress.add(ProgressBar::new(comic_files.len() as u64));
-    overall_progress.set_style(
-        ProgressStyle::default_bar()
-            .template("{spinner:.green} {pos}/{len} files [{elapsed} < {eta}] [{bar:40.cyan/blue}]")?
-            .progress_chars("█▉▊▋▌▍▎▏ "),
-    );
+    // 2. UI - Barres de progression
+    let multi = Arc::new(MultiProgress::new());
+    let main_bar = multi.add(ProgressBar::new(files.len() as u64));
+    main_bar.set_style(ProgressStyle::default_bar()
+        .template("{spinner:.green} {pos}/{len} fichiers [{bar:40.cyan/blue}] {elapsed}")?);
 
-    let stats = Arc::new(Mutex::new(HashMap::new()));
+    let stats_map = Arc::new(Mutex::new(HashMap::new()));
 
-    comic_files.par_iter().for_each(|comic_file| {
-        let file_progress = multi_progress.add(ProgressBar::new(100));
-        let style_result = ProgressStyle::default_bar()
-            .template("  {msg} [{elapsed_precise}] [{bar:30.green/yellow}] {percent}%")
-            .unwrap()
-            .progress_chars("█▉▊▋▌▍▎▏ ");
-        file_progress.set_style(style_result);
-        file_progress.set_message(format!(
-            "{}",
-            comic_file.path.file_name().unwrap().to_string_lossy()
-        ));
+    // 3. Boucle de traitement parallèle
+    files.par_iter().for_each(|f| {
+        let pb = multi.add(ProgressBar::new(100));
+        pb.set_style(ProgressStyle::default_bar()
+            .template("  {msg} [{bar:30.green}] {percent}%")
+            .unwrap());
 
-        match process_comic_file(comic_file, &args, &file_progress) {
-            Ok(file_stats) => {
-                let mut stats_map = stats.lock().unwrap();
+        let file_name = f.path.file_name().unwrap_or_default().to_string_lossy().to_string();
+        pb.set_message(file_name);
 
-                if let Some(ref status) = file_stats.status_message {
-                    file_progress.finish_with_message(format!("{} {} ({} processed, {} skipped)",
-                        if status.contains("Format") { "⏭️" } else { "✅" },
-                        status, file_stats.images_processed, file_stats.images_skipped));
-                } else if file_stats.compression_skipped {
-                    file_progress.finish_with_message(format!("⏭️  Skipped - savings below threshold ({} processed, {} skipped)",
-                        file_stats.images_processed, file_stats.images_skipped));
-                } else {
-                    file_progress.finish_with_message(format!("✅ Compressed ({} processed, {} skipped)",
-                        file_stats.images_processed, file_stats.images_skipped));
-                }
-
-                stats_map.insert(comic_file.path.clone(), file_stats);
+        match processor::process_comic_file(f, &args, &pb) {
+            Ok(s) => {
+                let msg = if s.compression_skipped { "⏭️ Skippé" } else { "✅ Terminé" };
+                pb.finish_with_message(msg);
+                stats_map.lock().unwrap().insert(f.path.clone(), s);
             }
             Err(e) => {
-                let error_stats = ProcessingStats {
-                    original_size: fs::metadata(&comic_file.path).map(|m| m.len()).unwrap_or(0),
-                    compressed_size: 0,
+                pb.finish_with_message(format!("❌ Erreur: {}", e));
+                let mut m = stats_map.lock().unwrap();
+                let size = fs::metadata(&f.path).map(|m| m.len()).unwrap_or(0);
+                m.insert(f.path.clone(), ProcessingStats {
+                    original_size: size,
+                    compressed_size: size,
                     images_processed: 0,
                     images_skipped: 0,
                     compression_skipped: false,
                     output_path: None,
                     error_message: Some(e.to_string()),
                     status_message: None,
-                };
-
-                let mut stats_map = stats.lock().unwrap();
-                stats_map.insert(comic_file.path.clone(), error_stats);
-
-                file_progress.finish_with_message(format!("❌ Failed: {}", e));
+                });
             }
         }
-        overall_progress.inc(1);
+        main_bar.inc(1);
     });
 
-    overall_progress.finish_with_message("🎉 All files processed!");
+    main_bar.finish_with_message("Traitement terminé !");
 
-    print_summary(&stats.lock().unwrap());
+    let final_stats = stats_map.lock().unwrap();
+    print_final_summary(&final_stats);
 
     Ok(())
 }
 
-fn detect_comic_file(path: &Path) -> Result<ComicFile> {
-    let extension = path
-        .extension()
-        .and_then(|ext| ext.to_str())
-        .map(|s| s.to_lowercase());
-
-    let file_type = match extension.as_deref() {
+fn detect_type(p: &Path) -> Result<ComicFile> {
+    let ext = p.extension().and_then(|e| e.to_str()).map(|s| s.to_lowercase());
+    let t = match ext.as_deref() {
         Some("cbz") => ComicType::Cbz,
         Some("cbr") => ComicType::Cbr,
         Some("pdf") => ComicType::Pdf,
         Some("epub") => ComicType::Epub,
-        _ => anyhow::bail!("Unsupported file type. Only CBR, CBZ, PDF, and EPUB files are supported."),
+        _ => anyhow::bail!("Format non supporté : {:?}", p),
+    };
+    Ok(ComicFile { path: p.to_path_buf(), file_type: t })
+}
+
+fn find_in_dir(dir: &Path) -> Result<Vec<ComicFile>> {
+    let mut res = Vec::new();
+    for e in WalkDir::new(dir).into_iter().filter_map(|e| e.ok()) {
+        if e.file_type().is_file() {
+            if let Ok(f) = detect_type(e.path()) {
+                res.push(f);
+            }
+        }
+    }
+    Ok(res)
+}
+
+fn find_by_glob(pat: &str) -> Result<Vec<ComicFile>> {
+    let mut res = Vec::new();
+    // On active explicitement les options pour que le glob se comporte comme un scan récursif
+    let options = glob::MatchOptions {
+        case_sensitive: false,
+        require_literal_separator: false,
+        require_literal_leading_dot: false,
     };
 
-    Ok(ComicFile {
-        path: path.to_path_buf(),
-        file_type,
-    })
-}
-
-fn find_comic_files(dir: &Path) -> Result<Vec<ComicFile>> {
-    let mut comic_files = Vec::new();
-
-    for entry in WalkDir::new(dir).into_iter().filter_map(|e| e.ok()) {
-        if entry.file_type().is_file() {
-            if let Ok(comic_file) = detect_comic_file(entry.path()) {
-                comic_files.push(comic_file);
+    for entry in glob::glob_with(pat, options).context("Format du pattern glob invalide")? {
+        if let Ok(p) = entry {
+            if p.is_file() {
+                if let Ok(f) = detect_type(&p) {
+                    res.push(f);
+                }
             }
         }
     }
-
-    Ok(comic_files)
+    Ok(res)
 }
 
-fn find_comic_files_by_glob(pattern: &str) -> Result<Vec<ComicFile>> {
-    let mut comic_files = Vec::new();
+fn print_final_summary(stats: &HashMap<PathBuf, ProcessingStats>) {
+    println!("\n📊 RÉSUMÉ FINAL :");
+    let mut total_saved = 0i64;
+    let mut files_ok = 0;
+    let mut files_skipped = 0;
+    let mut files_err = 0;
 
-    let patterns_to_try = vec![
-        pattern.to_string(),
-        if !pattern.starts_with('/') && !pattern.starts_with("**") {
-            format!("**/{}", pattern)
+    for (p, s) in stats {
+        let name = p.file_name().unwrap_or_default().to_string_lossy();
+        if let Some(err) = &s.error_message {
+            println!("  ❌ {} : {}", name, err);
+            files_err += 1;
+        } else if s.compression_skipped {
+            println!("  ⏭️  {} : Pas de gain significatif", name);
+            files_skipped += 1;
         } else {
-            pattern.to_string()
-        }
-    ];
-
-    for pattern_attempt in patterns_to_try {
-        for entry in glob(&pattern_attempt).context("Failed to read glob pattern")? {
-            match entry {
-                Ok(path) => {
-                    if path.is_file() {
-                        if let Ok(comic_file) = detect_comic_file(&path) {
-                            comic_files.push(comic_file);
-                        }
-                    }
-                }
-                Err(_) => {
-                }
-            }
-        }
-
-        if !comic_files.is_empty() {
-            break;
+            let saved = s.original_size as i64 - s.compressed_size as i64;
+            total_saved += saved;
+            files_ok += 1;
+            println!("  ✅ {} : -{:.1} Mo", name, saved as f64 / 1_048_576.0);
         }
     }
 
-    if comic_files.is_empty() {
-        println!("⚠️  No comic files found matching pattern: '{}'", pattern);
-        println!("💡 Try patterns like:");
-        println!("   - \"**/*Killer*.cbr\" (recursive search)");
-        println!("   - \"/full/path/**/Killer*.cbr\" (absolute path)");
-        println!("   - \"**/De Killer*.cbr\" (your specific case)");
-    }
-
-    Ok(comic_files)
-}
-
-fn process_comic_file(
-    comic_file: &ComicFile,
-    args: &Args,
-    progress: &ProgressBar,
-) -> Result<ProcessingStats> {
-    let original_size = fs::metadata(&comic_file.path)?.len();
-
-    let temp_dir = tempfile::tempdir()
-        .context("Failed to create temporary directory")?;
-    progress.set_position(10);
-
-    extract_comic(&comic_file, temp_dir.path(), progress).with_context(|| "extract_comic failed")?;
-    progress.set_position(30);
-
-    let image_files = find_image_files(temp_dir.path())?;
-
-    let stats = process_images(&image_files, args, progress).with_context(|| "process_images failed")?;
-    progress.set_position(80);
-
-    let temp_output_path = {
-        let parent = comic_file.path.parent().unwrap_or_else(|| Path::new("."));
-        let stem = comic_file.path.file_stem().unwrap().to_string_lossy();
-        parent.join(format!("{}_temp_compressed_file.cbz", stem))
-    };
-
-    create_cbz_archive(temp_dir.path(), &temp_output_path, progress).with_context(|| "create_cbz_archive failed")?;
-    progress.set_position(90);
-
-    let compressed_size = fs::metadata(&temp_output_path)?.len();
-
-    let savings_percent = if original_size > 0 {
-        ((original_size as f64 - compressed_size as f64) / original_size as f64) * 100.0
-    } else {
-        0.0
-    };
-
-    let compression_skipped = savings_percent < args.min_savings;
-
-    if compression_skipped {
-        fs::remove_file(&temp_output_path)
-            .context("Failed to remove temporary compressed file")?;
-
-        progress.set_position(100);
-
-        return Ok(ProcessingStats {
-            original_size,
-            compressed_size: original_size,
-            images_processed: stats.0,
-            images_skipped: stats.1,
-            compression_skipped: true,
-            output_path: None,
-            error_message: None,
-            status_message: None,
-        });
-    }
-
-    let final_output_path = if args.rename_original {
-        let original_path = &comic_file.path;
-        let original_extension = original_path.extension()
-            .and_then(|ext| ext.to_str())
-            .unwrap_or("cbr");
-
-        let parent = original_path.parent().unwrap_or_else(|| Path::new("."));
-        let stem = original_path.file_stem().unwrap().to_string_lossy();
-        let backup_path = parent.join(format!("{}_original.{}", stem, original_extension));
-        let final_compressed_path = parent.join(format!("{}.cbz", stem));
-
-        fs::rename(original_path, &backup_path)
-            .context("Failed to rename original file")?;
-
-        fs::rename(&temp_output_path, &final_compressed_path)
-            .context("Failed to rename compressed file")?;
-
-        final_compressed_path
-    } else {
-        let actual_output_path = generate_output_path(&comic_file.path, args.quality, false);
-        fs::rename(&temp_output_path, &actual_output_path)
-            .context("Failed to move compressed file to final destination")?;
-        actual_output_path
-    };
-
-    progress.set_position(100);
-
-    Ok(ProcessingStats {
-        original_size,
-        compressed_size,
-        images_processed: stats.0,
-        images_skipped: stats.1,
-        compression_skipped: false,
-        output_path: Some(final_output_path),
-        error_message: None,
-        status_message: None,
-    })
-}
-
-fn extract_comic(comic_file: &ComicFile, temp_dir: &Path, _progress: &ProgressBar) -> Result<()> {
-    match comic_file.file_type {
-        ComicType::Cbz => {
-            extract_zip_archive(&comic_file.path, temp_dir)?;
-        }
-        ComicType::Cbr => {
-            if let Err(_) = extract_rar_archive(&comic_file.path, temp_dir) {
-                extract_zip_archive(&comic_file.path, temp_dir)
-                    .context("Failed to extract CBR file as both RAR and ZIP")?;
-            }
-        }
-        ComicType::Pdf => {
-            extract_pdf_archive(&comic_file.path, temp_dir)?;
-        }
-        ComicType::Epub => {
-            extract_epub_archive(&comic_file.path, temp_dir)?;
-        }
-    }
-    Ok(())
-}
-
-fn extract_epub_archive(epub_path: &Path, temp_dir: &Path) -> Result<()> {
-    let mime_to_ext = |mime: &str| -> &str {
-        match mime {
-            "image/jpeg" => "jpg",
-            "image/png" => "png",
-            "image/gif" => "gif",
-            "image/bmp" => "bmp",
-            "image/webp" => "webp",
-            "image/tiff" | "image/tif" => "tiff",
-            _ => "",
-        }
-    };
-
-    fn extract_src_attrs(content: &str) -> Vec<String> {
-        let mut results = Vec::new();
-        let lower = content.to_lowercase();
-        let mut search_start = 0;
-        while let Some(pos) = lower[search_start..].find("src=") {
-            let pos = search_start + pos;
-            let rest = &content[pos + 4..];
-            let Some(quote) = rest.chars().next() else { break };
-            let quote_end = if quote == '"' { '"' } else { '\'' };
-            if let Some(end) = rest[1..].find(quote_end) {
-                results.push(rest[1..][..end].to_string());
-                search_start = pos + 4 + 1 + end;
-            } else {
-                break;
-            }
-        }
-        results
-    }
-
-    let mut doc = epub::doc::EpubDoc::new(epub_path)
-        .map_err(|e| anyhow::anyhow!("Failed to parse EPUB file: {:?}. Ensure it's a valid EPUB.", e))?;
-
-    #[derive(Clone)]
-    struct ImageRef {
-        path: std::path::PathBuf,
-        ext: String,
-    }
-
-    #[derive(Clone)]
-    struct SpineEntry {
-        idref: String,
-        is_image: bool,
-        image_path: Option<std::path::PathBuf>,
-        image_ext: Option<String>,
-        xhtml_content: Option<String>,
-    }
-
-    fn find_resource<'a>(
-        src: &str,
-        spine_resource_path: &std::path::PathBuf,
-        resources: &'a std::collections::HashMap<String, epub::doc::ResourceItem>,
-    ) -> Option<&'a epub::doc::ResourceItem> {
-        if let Some(r) = resources.get(src) {
-            return Some(r);
-        }
-        let base_dir = spine_resource_path.parent().map(|p| p.to_string_lossy().to_string());
-        if let Some(dir) = base_dir {
-            let resolved = if src.starts_with('/') {
-                src[1..].to_string()
-            } else {
-                format!("{}/{}", dir, src)
-            };
-            if let Some(r) = resources.get(&resolved) {
-                return Some(r);
-            }
-        }
-        if let Some(basename) = std::path::Path::new(src).file_name() {
-            for (_id, r) in resources {
-                if r.path.file_name().map(|n| n == basename).unwrap_or(false) {
-                    return Some(r);
-                }
-            }
-        }
-        None
-    }
-
-    let mut spine_image_info = Vec::new();
-    for item in &doc.spine {
-        let idref = &item.idref;
-        let is_image;
-        let (image_path, image_ext) = if let Some(resource) = doc.resources.get(idref) {
-            let ext = mime_to_ext(&resource.mime);
-            if !ext.is_empty() {
-                is_image = true;
-                (Some(resource.path.clone()), Some(ext.to_string()))
-            } else {
-                is_image = false;
-                (None, None)
-            }
-        } else {
-            is_image = false;
-            (None, None)
-        };
-        spine_image_info.push((idref.clone(), is_image, image_path, image_ext));
-    }
-
-    let entries: Vec<SpineEntry> = spine_image_info.into_iter().map(|(idref, is_image, image_path, image_ext)| {
-        let xhtml_content = if is_image {
-            None
-        } else {
-            doc.get_resource_str(&idref)
-                .filter(|(_, mime)| mime.contains("html") || mime.contains("xml"))
-                .map(|(content, _)| content)
-        };
-        SpineEntry {
-            idref,
-            is_image,
-            image_path,
-            image_ext,
-            xhtml_content,
-        }
-    }).collect();
-
-    let mut seen = std::collections::HashSet::new();
-    let mut images: Vec<ImageRef> = Vec::new();
-
-    for entry in &entries {
-        if entry.is_image {
-            if let (Some(path), Some(ext)) = (&entry.image_path, &entry.image_ext) {
-                if seen.insert(path.clone()) {
-                    images.push(ImageRef {
-                        path: path.clone(),
-                        ext: ext.clone(),
-                    });
-                }
-            }
-            continue;
-        }
-
-        if let Some(ref content) = entry.xhtml_content {
-            let srcs = extract_src_attrs(content);
-            let spine_res_path = doc.resources
-                .get(&entry.idref)
-                .map(|r| r.path.clone());
-            for src in srcs {
-                let resolved_resource = spine_res_path
-                    .as_ref()
-                    .and_then(|p| find_resource(&src, p, &doc.resources))
-                    .or_else(|| find_resource(&src, &std::path::PathBuf::new(), &doc.resources));
-                if let Some(r) = resolved_resource {
-                    let ext = mime_to_ext(&r.mime);
-                    if !ext.is_empty() && seen.insert(r.path.clone()) {
-                        images.push(ImageRef {
-                            path: r.path.clone(),
-                            ext: ext.to_string(),
-                        });
-                    }
-                }
-            }
-        }
-    }
-
-    if images.is_empty() {
-        let mut all: Vec<ImageRef> = doc.resources.iter()
-            .filter_map(|(_id, resource)| {
-                let ext = mime_to_ext(&resource.mime);
-                if !ext.is_empty() {
-                    Some(ImageRef {
-                        path: resource.path.clone(),
-                        ext: ext.to_string(),
-                    })
-                } else {
-                    None
-                }
-            })
-            .collect();
-        all.sort_by(|a, b| a.path.cmp(&b.path));
-        for img in all {
-            if seen.insert(img.path.clone()) {
-                images.push(img);
-            }
-        }
-    }
-
-    let mut image_count = 0u32;
-    for img in &images {
-        image_count += 1;
-        let out_name = format!("page_{:04}.{}", image_count, img.ext);
-        let out_path = temp_dir.join(&out_name);
-
-        if let Some(parent) = img.path.parent() {
-            let dir_path = temp_dir.join(parent);
-            fs::create_dir_all(&dir_path)?;
-        }
-
-        if let Some(data) = doc.get_resource_by_path(&img.path) {
-            fs::write(&out_path, data)
-                .map_err(|e| anyhow::anyhow!("Failed to write EPUB image {}: {:?}", out_name, e))?;
-        }
-    }
-
-    Ok(())
-}
-
-fn extract_zip_archive(archive_path: &Path, temp_dir: &Path) -> Result<()> {
-    let file = File::open(archive_path)?;
-    let reader = BufReader::new(file);
-    let mut archive = zip::ZipArchive::new(reader)?;
-
-    for i in 0..archive.len() {
-        let mut file = archive.by_index(i)?;
-        let file_path = temp_dir.join(file.name());
-
-        if let Some(parent) = file_path.parent() {
-            fs::create_dir_all(parent)?;
-        }
-
-        if file.name().ends_with('/') {
-            continue;
-        }
-
-        let mut output_file = File::create(&file_path)?;
-        std::io::copy(&mut file, &mut output_file)?;
-    }
-
-    Ok(())
-}
-
-fn extract_rar_archive(archive_path: &Path, temp_dir: &Path) -> Result<()> {
-    let archive = unrar::Archive::new(archive_path)
-        .open_for_processing()
-        .map_err(|e| anyhow::anyhow!("Failed to open RAR archive: {:?}", e))?;
-
-    let mut current_archive = archive;
-
-    loop {
-        match current_archive.read_header() {
-            Ok(Some(archive_with_header)) => {
-                let archive_after_extract = archive_with_header
-                    .extract_with_base(temp_dir)
-                    .map_err(|e| anyhow::anyhow!("Failed to extract RAR entry: {:?}", e))?;
-
-                current_archive = archive_after_extract;
-            }
-            Ok(None) => {
-                break;
-            }
-            Err(e) => {
-                return Err(anyhow::anyhow!("Failed to read RAR header: {:?}", e));
-            }
-        }
-    }
-
-    Ok(())
-}
-
-fn extract_pdf_archive(pdf_path: &Path, temp_dir: &Path) -> Result<()> {
-    use lopdf::{Document, Object};
-
-    let doc = Document::load(pdf_path)
-        .map_err(|e| anyhow::anyhow!("Failed to load PDF: {:?}", e))?;
-
-    let pages = doc.get_pages();
-
-    fn decode_to_rgb(path: &Path) -> Result<image::RgbImage> {
-        if path.extension().and_then(|e| e.to_str()).map(|e| e.eq_ignore_ascii_case("jp2")).unwrap_or(false) {
-            let jp2 = jpeg2k::Image::from_file(path)
-                .map_err(|e| anyhow::anyhow!("JP2 decode failed {}: {:?}", path.display(), e))?;
-            let px = jp2.get_pixels(None)
-                .map_err(|e| anyhow::anyhow!("JP2 get_pixels failed {}: {:?}", path.display(), e))?;
-            let (w, h) = (px.width, px.height);
-            let rgb = match px.data {
-                jpeg2k::ImagePixelData::Rgb8(d) => d,
-                jpeg2k::ImagePixelData::Rgba8(d) => d.chunks(4).flat_map(|c| [c[0], c[1], c[2]]).collect(),
-                jpeg2k::ImagePixelData::L8(d) => d.iter().flat_map(|&v| [v, v, v]).collect(),
-                _ => return Err(anyhow::anyhow!("Unsupported JP2 pixel format in {}", path.display())),
-            };
-            image::RgbImage::from_raw(w, h, rgb)
-                .ok_or_else(|| anyhow::anyhow!("Failed to build RgbImage from {}", path.display()))
-        } else {
-            Ok(image::ImageReader::open(path)?.decode()?.into_rgb8())
-        }
-    }
-
-    fn decode_to_luma(path: &Path) -> Result<image::GrayImage> {
-        if path.extension().and_then(|e| e.to_str()).map(|e| e.eq_ignore_ascii_case("jp2")).unwrap_or(false) {
-            let jp2 = jpeg2k::Image::from_file(path)
-                .map_err(|e| anyhow::anyhow!("JP2 decode failed {}: {:?}", path.display(), e))?;
-            let px = jp2.get_pixels(None)
-                .map_err(|e| anyhow::anyhow!("JP2 get_pixels failed {}: {:?}", path.display(), e))?;
-            let (w, h) = (px.width, px.height);
-            let gray = match px.data {
-                jpeg2k::ImagePixelData::L8(d) => d,
-                jpeg2k::ImagePixelData::Rgb8(d) => d.chunks(3)
-                    .map(|c| (0.299 * c[0] as f32 + 0.587 * c[1] as f32 + 0.114 * c[2] as f32) as u8)
-                    .collect(),
-                jpeg2k::ImagePixelData::Rgba8(d) => d.chunks(4)
-                    .map(|c| (0.299 * c[0] as f32 + 0.587 * c[1] as f32 + 0.114 * c[2] as f32) as u8)
-                    .collect(),
-                _ => return Err(anyhow::anyhow!("Unsupported JP2 pixel format in {}", path.display())),
-            };
-            image::GrayImage::from_raw(w, h, gray)
-                .ok_or_else(|| anyhow::anyhow!("Failed to build GrayImage from {}", path.display()))
-        } else {
-            Ok(image::ImageReader::open(path)?.decode()?.into_luma8())
-        }
-    }
-
-    fn composite_over(base: &mut image::RgbImage, overlay: &image::RgbImage, alpha: &image::GrayImage) {
-        let (w, h) = (base.width(), base.height());
-        for y in 0..h {
-            for x in 0..w {
-                let a = alpha.get_pixel(x, y).0[0];
-                if a == 0 { continue; }
-                if a == 255 {
-                    base.put_pixel(x, y, *overlay.get_pixel(x, y));
-                    continue;
-                }
-                let af = a as f32 / 255.0;
-                let [br, bg, bb] = base.get_pixel(x, y).0;
-                let [or, og, ob] = overlay.get_pixel(x, y).0;
-                let nr = (or as f32 * af + br as f32 * (1.0 - af)).round() as u8;
-                let ng = (og as f32 * af + bg as f32 * (1.0 - af)).round() as u8;
-                let nb = (ob as f32 * af + bb as f32 * (1.0 - af)).round() as u8;
-                base.put_pixel(x, y, image::Rgb([nr, ng, nb]));
-            }
-        }
-    }
-
-    fn extract_stream(stream: &lopdf::Stream, doc: &Document, temp_dir: &Path, ref_id: &(u32, u16)) -> Result<PathBuf> {
-        let base = format!("img_{:04}_{:04}", ref_id.0, ref_id.1);
-        let (path, _) = extract_image_from_stream_to(stream, doc, temp_dir, ref_id, &base)?;
-        Ok(path)
-    }
-
-    fn decode_jbig2_mask(data: &[u8], width: u32, height: u32) -> Option<image::GrayImage> {
-        struct LumaDecoder {
-            buf: Vec<u8>,
-        }
-        impl hayro_jbig2::Decoder for LumaDecoder {
-            fn push_pixel(&mut self, black: bool) {
-                self.buf.push(if black { 0 } else { 255 });
-            }
-            fn push_pixel_chunk(&mut self, black: bool, chunk_count: u32) {
-                let luma = if black { 0 } else { 255 };
-                self.buf.extend(std::iter::repeat(luma).take(chunk_count as usize * 8));
-            }
-            fn next_line(&mut self) {}
-        }
-
-        let img = hayro_jbig2::Image::new_embedded(data, None).ok()?;
-        let (pw, ph) = (img.width(), img.height());
-        let mut dec = LumaDecoder { buf: Vec::with_capacity((pw * ph) as usize) };
-        img.decode(&mut dec).ok()?;
-        dec.buf.truncate((pw * ph) as usize);
-        let gray = image::GrayImage::from_raw(pw, ph, dec.buf)?;
-        if pw != width || ph != height {
-            Some(image::imageops::resize(&gray, width, height, image::imageops::FilterType::Nearest))
-        } else {
-            Some(gray)
-        }
-    }
-
-    for (page_num, (_, page_object_id)) in pages.iter().enumerate() {
-        let mut smask_ref_ids: std::collections::HashSet<(u32, u16)> = std::collections::HashSet::new();
-        let mut layers: Vec<(String, (u32, u16), Option<(u32, u16)>)> = Vec::new();
-
-        if let Ok(Object::Dictionary(page_dict)) = doc.get_object(*page_object_id) {
-            if let Ok(Object::Dictionary(resources)) = page_dict.get(b"Resources") {
-                if let Ok(Object::Dictionary(xobject)) = resources.get(b"XObject") {
-                    for (_name, obj_ref) in xobject.iter() {
-                        if let Object::Reference(ref_id) = obj_ref {
-                            if let Ok(Object::Stream(stream)) = doc.get_object(*ref_id) {
-                                if let Ok(Object::Reference(smask_id)) = stream.dict.get(b"SMask") {
-                                    smask_ref_ids.insert(*smask_id);
-                                }
-                            }
-                        }
-                    }
-                    for (name, obj_ref) in xobject.iter() {
-                        if let Object::Reference(ref_id) = obj_ref {
-                            if smask_ref_ids.contains(ref_id) { continue; }
-                            if let Ok(Object::Stream(stream)) = doc.get_object(*ref_id) {
-                                if let Ok(Object::Name(subtype)) = stream.dict.get(b"Subtype") {
-                                    if subtype == b"Image" {
-                                        let smask = stream.dict.get(b"SMask").ok()
-                                            .and_then(|o| if let Object::Reference(id) = o { Some(*id) } else { None });
-                                        layers.push((String::from_utf8_lossy(name).into_owned(), *ref_id, smask));
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        if layers.is_empty() { continue; }
-        layers.sort_by(|a, b| a.0.cmp(&b.0));
-
-        let output_num = page_num + 1;
-        let out_path = temp_dir.join(format!("page_{:04}.png", output_num));
-
-        let mut composite: Option<image::RgbImage> = None;
-
-        for (_, ref_id, smask_ref) in &layers {
-            let layer_rgb = if let Ok(Object::Stream(stream)) = doc.get_object(*ref_id) {
-                let path = extract_stream(&stream, &doc, temp_dir, ref_id)?;
-                if path == PathBuf::new() { continue; }
-                let rgb = decode_to_rgb(&path)?;
-                let _ = fs::remove_file(&path);
-                rgb
-            } else { continue; };
-
-            let (w, h) = (layer_rgb.width(), layer_rgb.height());
-
-            let alpha: Option<image::GrayImage> = if let Some(smask_id) = smask_ref {
-                if let Ok(Object::Stream(smask_stream)) = doc.get_object(*smask_id) {
-                    let filter = smask_stream.dict.get(b"Filter").ok()
-                        .and_then(|o| if let Object::Name(n) = o { Some(n.clone()) } else { None });
-                    match filter.as_deref() {
-                        Some(b"JBIG2Decode") => {
-                            decode_jbig2_mask(&smask_stream.content, w, h)
-                        }
-                        _ => {
-                            let path = extract_stream(&smask_stream, &doc, temp_dir, smask_id)?;
-                            if path == PathBuf::new() { None } else {
-                                let gray = decode_to_luma(&path).ok();
-                                let _ = fs::remove_file(&path);
-                                gray
-                            }
-                        }
-                    }
-                } else { None }
-            } else { None };
-
-            match (&mut composite, alpha) {
-                (None, None) => {
-                    composite = Some(layer_rgb);
-                }
-                (None, Some(alpha)) => {
-                    let mut base = image::RgbImage::from_pixel(w, h, image::Rgb([255u8, 255, 255]));
-                    composite_over(&mut base, &layer_rgb, &alpha);
-                    composite = Some(base);
-                }
-                (Some(ref mut base), None) => {
-                    *base = layer_rgb;
-                }
-                (Some(ref mut base), Some(alpha)) => {
-                    let (bw, bh) = (base.width(), base.height());
-                    let layer_rgb = if layer_rgb.width() != bw || layer_rgb.height() != bh {
-                        image::imageops::resize(&layer_rgb, bw, bh, image::imageops::FilterType::Lanczos3)
-                    } else { layer_rgb };
-                    let alpha = if alpha.width() != bw || alpha.height() != bh {
-                        image::imageops::resize(&alpha, bw, bh, image::imageops::FilterType::Nearest)
-                    } else { alpha };
-                    composite_over(base, &layer_rgb, &alpha);
-                }
-            }
-        }
-
-        if let Some(img) = composite {
-            img.save(&out_path).map_err(|e| anyhow::anyhow!("save page {} failed: {:?}", output_num, e))?;
-        }
-    }
-
-    Ok(())
-}
-
-fn extract_image_from_stream_to(
-    stream: &lopdf::Stream,
-    _doc: &lopdf::Document,
-    temp_dir: &Path,
-    _ref_id: &(u32, u16),
-    base_name: &str,
-) -> Result<(PathBuf, usize)> {
-    use lopdf::Object;
-
-    let width = stream.dict.get(b"Width")
-        .ok()
-        .and_then(|obj| obj.as_i64().ok())
-        .unwrap_or(0);
-
-    let height = stream.dict.get(b"Height")
-        .ok()
-        .and_then(|obj| obj.as_i64().ok())
-        .unwrap_or(0);
-
-    let bits_per_component = stream.dict.get(b"BitsPerComponent")
-        .ok()
-        .and_then(|obj| obj.as_i64().ok())
-        .unwrap_or(8) as u32;
-
-    if let Ok(Object::Name(filter)) = stream.dict.get(b"Filter") {
-        match filter.as_slice() {
-            b"DCTDecode" => {
-                let output_path = temp_dir.join(format!("{}.jpg", base_name));
-                fs::write(&output_path, &stream.content)
-                    .map_err(|e| anyhow::anyhow!("Failed to save JPEG image: {:?}", e))?;
-                return Ok((output_path, 0));
-            }
-            b"FlateDecode" => {
-                extract_flate_decoded_image(stream, temp_dir, base_name, width as u32, height as u32, bits_per_component)?;
-                let output_path = temp_dir.join(format!("{}.png", base_name));
-                return Ok((output_path, 0));
-            }
-            b"CCITTFaxDecode" => {
-                return Ok((PathBuf::new(), 0));
-            }
-            b"JPXDecode" => {
-                let output_path = temp_dir.join(format!("{}.jp2", base_name));
-                fs::write(&output_path, &stream.content)
-                    .map_err(|e| anyhow::anyhow!("Failed to save JPEG 2000 image: {:?}", e))?;
-                extract_icc_profile_to(stream, _doc, temp_dir, base_name)?;
-                return Ok((output_path, 0));
-            }
-            _ => {
-                return Ok((PathBuf::new(), 0));
-            }
-        }
-    } else {
-        extract_raw_image(stream, temp_dir, base_name, width as u32, height as u32, bits_per_component)?;
-        let output_path = temp_dir.join(format!("{}.png", base_name));
-        return Ok((output_path, 0));
-    }
-}
-
-
-fn extract_flate_decoded_image(
-    stream: &lopdf::Stream,
-    temp_dir: &Path,
-    base_name: &str,
-    width: u32,
-    height: u32,
-    bits_per_component: u32,
-) -> Result<()> {
-    use lopdf::Object;
-    use flate2::read::ZlibDecoder;
-    use std::io::Read;
-
-    let mut decoder = ZlibDecoder::new(stream.content.as_slice());
-    let mut decompressed_data = Vec::new();
-    decoder.read_to_end(&mut decompressed_data)
-        .map_err(|e| anyhow::anyhow!("Failed to decompress image data: {:?}", e))?;
-
-    let color_space = stream.dict.get(b"ColorSpace")
-        .ok()
-        .and_then(|obj| match obj {
-            Object::Name(name) => Some(name.as_slice()),
-            _ => None,
-        });
-
-    let output_path = temp_dir.join(format!("{}.png", base_name));
-
-    match (color_space.map(|cs| cs), bits_per_component) {
-        (Some(b"DeviceRGB"), 8) => {
-            let img = image::RgbImage::from_raw(width, height, decompressed_data)
-                .ok_or_else(|| anyhow::anyhow!("Failed to create RGB image from raw data"))?;
-            image::DynamicImage::ImageRgb8(img).save(&output_path)
-                .map_err(|e| anyhow::anyhow!("Failed to save PNG image: {:?}", e))?;
-        }
-        (Some(b"DeviceGray"), 8) => {
-            let img = image::GrayImage::from_raw(width, height, decompressed_data)
-                .ok_or_else(|| anyhow::anyhow!("Failed to create grayscale image from raw data"))?;
-            image::DynamicImage::ImageLuma8(img).save(&output_path)
-                .map_err(|e| anyhow::anyhow!("Failed to save PNG image: {:?}", e))?;
-        }
-        (Some(b"DeviceCMYK"), 8) => {
-            if decompressed_data.len() == (width * height * 4) as usize {
-                let mut rgb_data = Vec::with_capacity((width * height * 3) as usize);
-                for chunk in decompressed_data.chunks(4) {
-                    let c = chunk[0] as f32 / 255.0;
-                    let m = chunk[1] as f32 / 255.0;
-                    let y = chunk[2] as f32 / 255.0;
-                    let k = chunk[3] as f32 / 255.0;
-                    let r = ((1.0 - c) * (1.0 - k) * 255.0) as u8;
-                    let g = ((1.0 - m) * (1.0 - k) * 255.0) as u8;
-                    let b = ((1.0 - y) * (1.0 - k) * 255.0) as u8;
-                    rgb_data.extend_from_slice(&[r, g, b]);
-                }
-                let img = image::RgbImage::from_raw(width, height, rgb_data)
-                    .ok_or_else(|| anyhow::anyhow!("Failed to create RGB image from CMYK data"))?;
-                image::DynamicImage::ImageRgb8(img).save(&output_path)
-                    .map_err(|e| anyhow::anyhow!("Failed to save PNG image: {:?}", e))?;
-            } else {
-                return Err(anyhow::anyhow!("CMYK data size mismatch"));
-            }
-        }
-        _ => {
-            return Ok(());
-        }
-    }
-
-    Ok(())
-}
-
-fn extract_raw_image(
-    stream: &lopdf::Stream,
-    temp_dir: &Path,
-    base_name: &str,
-    width: u32,
-    height: u32,
-    bits_per_component: u32,
-) -> Result<()> {
-    use lopdf::Object;
-
-    let color_space = stream.dict.get(b"ColorSpace")
-        .ok()
-        .and_then(|obj| match obj {
-            Object::Name(name) => Some(name.as_slice()),
-            _ => None,
-        });
-
-    let output_path = temp_dir.join(format!("{}.png", base_name));
-
-    match (color_space.map(|cs| cs), bits_per_component) {
-        (Some(b"DeviceRGB"), 8) => {
-            let img = image::RgbImage::from_raw(width, height, stream.content.clone())
-                .ok_or_else(|| anyhow::anyhow!("Failed to create RGB image from raw data"))?;
-            image::DynamicImage::ImageRgb8(img).save(&output_path)
-                .map_err(|e| anyhow::anyhow!("Failed to save PNG image: {:?}", e))?;
-        }
-        (Some(b"DeviceGray"), 8) => {
-            let img = image::GrayImage::from_raw(width, height, stream.content.clone())
-                .ok_or_else(|| anyhow::anyhow!("Failed to create grayscale image from raw data"))?;
-            image::DynamicImage::ImageLuma8(img).save(&output_path)
-                .map_err(|e| anyhow::anyhow!("Failed to save PNG image: {:?}", e))?;
-        }
-        _ => {
-            return Ok(());
-        }
-    }
-
-    Ok(())
-}
-
-fn extract_icc_profile_to(
-    stream: &lopdf::Stream,
-    doc: &lopdf::Document,
-    temp_dir: &Path,
-    base_name: &str,
-) -> Result<()> {
-    use lopdf::Object;
-
-    if let Ok(Object::Array(arr)) = stream.dict.get(b"ColorSpace") {
-        for i in 0..arr.len() {
-            let is_iccbased = match &arr[i] {
-                Object::Name(name) => name.as_slice() == b"ICCBased",
-                Object::Reference(ref_id) => {
-                    if let Ok(Object::Name(name)) = doc.get_object(*ref_id) {
-                        name.as_slice() == b"ICCBased"
-                    } else {
-                        false
-                    }
-                }
-                _ => false,
-            };
-
-            if is_iccbased && i + 1 < arr.len() {
-                let profile_ref = match &arr[i + 1] {
-                    Object::Reference(ref_id) => *ref_id,
-                    _ => continue,
-                };
-
-                if let Ok(Object::Stream(profile_stream)) = doc.get_object(profile_ref) {
-                    let icc_path = temp_dir.join(format!("{}.icc", base_name));
-                    let _ = fs::write(&icc_path, &profile_stream.content);
-                    return Ok(());
-                }
-            }
-        }
-    }
-
-    if let Ok(Object::Reference(colorspace_ref)) = stream.dict.get(b"ColorSpace") {
-        if let Ok(Object::Name(name)) = doc.get_object(*colorspace_ref) {
-            if name.as_slice() == b"ICCBased" {
-                if let Ok(Object::Stream(profile_stream)) = doc.get_object(*colorspace_ref) {
-                    let icc_path = temp_dir.join(format!("{}.icc", base_name));
-                    let _ = fs::write(&icc_path, &profile_stream.content);
-                    return Ok(());
-                }
-            }
-        }
-    }
-
-    Ok(())
-}
-
-
-fn find_image_files(dir: &Path) -> Result<Vec<PathBuf>> {
-    let mut image_files = Vec::new();
-
-    for entry in WalkDir::new(dir).into_iter().filter_map(|e| e.ok()) {
-        if entry.file_type().is_file() {
-            let path = entry.path();
-            if let Some(extension) = path.extension().and_then(|ext| ext.to_str()) {
-                match extension.to_lowercase().as_str() {
-                    "jpg" | "jpeg" | "png" | "bmp" | "tiff" | "tif" | "jp2" => {
-                        image_files.push(path.to_path_buf());
-                    }
-                    _ => {}
-                }
-            }
-        }
-    }
-
-    image_files.sort();
-    Ok(image_files)
-}
-
-fn process_images(
-    image_files: &[PathBuf],
-    args: &Args,
-    progress: &ProgressBar,
-) -> Result<(usize, usize)> {
-    let (sender, receiver): (Sender<(PathBuf, bool)>, Receiver<(PathBuf, bool)>) = bounded(100);
-    let processed_count = Arc::new(Mutex::new(0));
-    let skipped_count = Arc::new(Mutex::new(0));
-    let total_images = image_files.len();
-
-    let progress_clone = progress.clone();
-    let processed_clone = Arc::clone(&processed_count);
-    let skipped_clone = Arc::clone(&skipped_count);
-
-    thread::spawn(move || {
-        for (_, success) in receiver {
-            if success {
-                *processed_clone.lock().unwrap() += 1;
-            } else {
-                *skipped_clone.lock().unwrap() += 1;
-            }
-
-            let current = *processed_clone.lock().unwrap() + *skipped_clone.lock().unwrap();
-            let progress_percent = 30 + ((current * 50) / total_images);
-            if progress_percent % 10 == 0 || current == total_images || progress_percent >= 80 {
-                progress_clone.set_position(progress_percent as u64);
-            }
-        }
-    });
-
-    image_files.par_iter().for_each(|image_path| {
-        let result = process_single_image(image_path, args);
-        match &result {
-            Err(e) => {
-                if args.verbose {
-                    eprintln!("Warning: Failed to process image {}: {}. Skipping...",
-                              image_path.display(), e);
-                }
-                sender.send((image_path.clone(), false)).unwrap();
-            }
-            Ok(_) => {
-                sender.send((image_path.clone(), true)).unwrap();
-            }
-        }
-    });
-
-    drop(sender);
-    thread::sleep(std::time::Duration::from_millis(100));
-
-    let processed = *processed_count.lock().unwrap();
-    let skipped = *skipped_count.lock().unwrap();
-
-    Ok((processed, skipped))
-}
-
-fn process_single_image(image_path: &Path, args: &Args) -> Result<()> {
-    if args.skip_compression {
-        return Ok(());
-    }
-
-    if image_path.extension()
-        .and_then(|e| e.to_str())
-        .map(|e| e.to_lowercase() == "jp2")
-        .unwrap_or(false)
-    {
-        let jp2_img = jpeg2k::Image::from_file(image_path)
-            .map_err(|e| anyhow::anyhow!("Failed to open JPEG 2000 image: {:?}", e))?;
-        let pixels = jp2_img.get_pixels(None)
-            .map_err(|e| anyhow::anyhow!("Failed to get JPEG 2000 pixels: {:?}", e))?;
-
-        let (rgb_data, width, height) = match pixels.data {
-            jpeg2k::ImagePixelData::Rgb8(data) => (data, pixels.width, pixels.height),
-            jpeg2k::ImagePixelData::Rgba8(data) => {
-                let mut rgb = Vec::with_capacity(pixels.width as usize * pixels.height as usize * 3);
-                for i in (0..data.len()).step_by(4) {
-                    if i + 2 < data.len() {
-                        rgb.push(data[i]);
-                        rgb.push(data[i + 1]);
-                        rgb.push(data[i + 2]);
-                    }
-                }
-                (rgb, pixels.width, pixels.height)
-            }
-            jpeg2k::ImagePixelData::L8(data) => {
-                let img = image::DynamicImage::ImageLuma8(
-                    image::GrayImage::from_raw(pixels.width, pixels.height, data.clone())
-                        .ok_or_else(|| anyhow::anyhow!("Failed to create grayscale image from JPEG 2000 data"))?
-                );
-                let webp_path = image_path.with_extension("webp");
-                let webp_bytes = encode_webp(&img, args.quality)?;
-                fs::write(&webp_path, webp_bytes)?;
-                fs::remove_file(image_path)?;
-                return Ok(());
-            }
-            _ => {
-                return Ok(());
-            }
-        };
-
-        let icc_path = image_path.with_extension("icc");
-        let rgb_data = if icc_path.exists() {
-            let icc_data = fs::read(&icc_path)
-                .map_err(|e| anyhow::anyhow!("Failed to read ICC profile: {:?}", e))?;
-            let source_profile = moxcms::ColorProfile::new_from_slice(&icc_data)
-                .map_err(|e| anyhow::anyhow!("Failed to load ICC profile: {:?}", e))?;
-            let dest_profile = moxcms::ColorProfile::new_srgb();
-            let transform = source_profile
-                .create_transform_8bit(
-                    moxcms::Layout::Rgb,
-                    &dest_profile,
-                    moxcms::Layout::Rgb,
-                    moxcms::TransformOptions::default(),
-                )
-                .map_err(|e| anyhow::anyhow!("Failed to create color transform: {:?}", e))?;
-
-            let mut transformed = vec![0u8; rgb_data.len()];
-            let img_width = width as usize;
-            for chunk in rgb_data
-                .chunks_exact(img_width * 3)
-                .zip(transformed.chunks_exact_mut(img_width * 3))
-            {
-                transform
-                    .transform(chunk.0, chunk.1)
-                    .map_err(|e| anyhow::anyhow!("Color transform failed: {:?}", e))?;
-            }
-            transformed
-        } else {
-            rgb_data
-        };
-
-        let _ = fs::remove_file(&icc_path);
-
-        let img = image::DynamicImage::ImageRgb8(
-            image::RgbImage::from_raw(width, height, rgb_data)
-                .ok_or_else(|| anyhow::anyhow!("Failed to create RGB image from transformed JPEG 2000 data"))?,
-        );
-
-        let webp_path = image_path.with_extension("webp");
-        let webp_bytes = encode_webp(&img, args.quality)?;
-
-        fs::write(&webp_path, webp_bytes)?;
-        fs::remove_file(image_path)?;
-        return Ok(());
-    }
-
-    let img = ImageReader::open(image_path)?.decode()?;
-
-    let (width, height) = (img.width(), img.height());
-    let aspect_ratio = width as f32 / height as f32;
-
-    let new_height = args.target_height;
-    let new_width = (new_height as f32 * aspect_ratio) as u32;
-
-    let resized = img.resize(new_width, new_height, image::imageops::FilterType::Lanczos3);
-
-    let webp_path = image_path.with_extension("webp");
-
-    let webp_bytes = encode_webp(&resized, args.quality)?;
-
-    fs::write(&webp_path, webp_bytes)?;
-    fs::remove_file(image_path)?;
-    Ok(())
-}
-
-fn encode_webp(img: &image::DynamicImage, quality: u8) -> Result<Vec<u8>> {
-    let rgb_img = img.to_rgb8();
-    let (width, height) = rgb_img.dimensions();
-
-    let encoder = webp::Encoder::from_rgb(&rgb_img, width, height);
-    let encoded = encoder.encode(quality as f32);
-
-    Ok(encoded.to_vec())
-}
-
-fn create_cbz_archive(temp_dir: &Path, output_path: &Path, _progress: &ProgressBar) -> Result<()> {
-    let file = File::create(output_path)?;
-    let mut zip = ZipWriter::new(file);
-    let options = FileOptions::<()>::default().compression_method(zip::CompressionMethod::Deflated);
-
-    for entry in WalkDir::new(temp_dir).into_iter().filter_map(|e| e.ok()) {
-        if entry.file_type().is_file() {
-            let path = entry.path();
-            let relative_path = path.strip_prefix(temp_dir)?;
-
-            zip.start_file(relative_path.to_string_lossy(), options)?;
-            let file_content = fs::read(path)?;
-            zip.write_all(&file_content)?;
-        }
-    }
-
-    zip.finish()?;
-    Ok(())
-}
-
-fn generate_output_path(input_path: &Path, quality: u8, rename_original: bool) -> PathBuf {
-    let parent = input_path.parent().unwrap_or_else(|| Path::new("."));
-    let stem = input_path.file_stem().unwrap().to_string_lossy();
-
-    if rename_original {
-        parent.join(format!("{}.cbz", stem))
-    } else {
-        parent.join(format!("{} optimized_webp_q{}.cbz", stem, quality))
-    }
-}
-
-fn print_summary(stats: &HashMap<PathBuf, ProcessingStats>) {
-    println!("\n📊 Processing Summary:");
-    println!("=====================================================");
-
-    let mut total_original = 0u64;
-    let mut total_compressed = 0u64;
-    let mut total_images = 0;
-    let mut total_skipped = 0;
-    let mut files_compressed = 0u32;
-    let mut files_format_converted = 0u32;
-    let mut files_status_skipped = 0u32;
-    let mut files_with_errors = 0u32;
-
-    for (path, stat) in stats {
-        if let Some(error_msg) = &stat.error_message {
-            println!("  ❌ {} — {}", path.file_name().unwrap().to_string_lossy(), error_msg);
-            files_with_errors += 1;
-            continue;
-        }
-
-        let name = path.file_name().unwrap().to_string_lossy().to_string();
-
-        if stat.compression_skipped {
-            let savings_pct = if stat.original_size > 0 {
-                ((stat.original_size as f64 - stat.compressed_size as f64) / stat.original_size as f64) * 100.0
-            } else { 0.0 };
-            println!("  ⏭️  {} — skipped — compression offered no benefit ({:.1}% savings, {:.1} MB → {:.1} MB)",
-                name, savings_pct,
-                stat.original_size as f64 / 1_048_576.0,
-                stat.compressed_size as f64 / 1_048_576.0);
-
-            files_status_skipped += 1;
-            total_original += stat.original_size;
-            total_compressed += stat.original_size;
-            total_images += stat.images_processed;
-            total_skipped += stat.images_skipped;
-        } else if let Some(ref status) = stat.status_message {
-            let output_name = stat.output_path
-                .as_ref()
-                .map(|p| p.file_name().unwrap().to_string_lossy().to_string())
-                .unwrap_or_else(|| "unknown".to_string());
-            println!("  ⏭️  {} — {} ({:.1} MB → {:.1} MB, {} processed, {} skipped)",
-                name, status,
-                stat.original_size as f64 / 1_048_576.0,
-                stat.compressed_size as f64 / 1_048_576.0,
-                stat.images_processed, stat.images_skipped);
-            println!("     → {}", output_name);
-            files_format_converted += 1;
-            total_original += stat.original_size;
-            total_compressed += stat.compressed_size;
-            total_images += stat.images_processed;
-            total_skipped += stat.images_skipped;
-        } else {
-            let savings_pct = if stat.original_size > stat.compressed_size {
-                ((stat.original_size - stat.compressed_size) as f64 / stat.original_size as f64) * 100.0
-            } else { 0.0 };
-            let output_name = stat.output_path
-                .as_ref()
-                .map(|p| p.file_name().unwrap().to_string_lossy().to_string())
-                .unwrap_or_else(|| "unknown".to_string());
-            let diff_mb = (stat.original_size as f64 - stat.compressed_size as f64) / 1_048_576.0;
-            println!("  ✅ {} — {:.1}% savings ({:.1} MB saved, {} processed, {} skipped)",
-                name, savings_pct, diff_mb,
-                stat.images_processed, stat.images_skipped);
-            println!("     → {}", output_name);
-            files_compressed += 1;
-            total_original += stat.original_size;
-            total_compressed += stat.compressed_size;
-            total_images += stat.images_processed;
-            total_skipped += stat.images_skipped;
-        }
-    }
-
-    let overall_savings = if total_original > total_compressed {
-        ((total_original - total_compressed) as f64 / total_original as f64) * 100.0
-    } else {
-        0.0
-    };
-
-    println!("\n  ── Files ──");
-    println!("    Successfully compressed:       {}", files_compressed);
-    if files_format_converted > 0 {
-        println!("    Format converted:              {}", files_format_converted);
-    }
-    if files_status_skipped > 0 {
-        println!("    Skipped (no improvement):      {}", files_status_skipped);
-    }
-    if files_with_errors > 0 {
-        println!("    With errors:                   {}", files_with_errors);
-    }
-
-    println!("\n  ── Images ──");
-    println!("    Processed:  {}", total_images);
-    println!("    Skipped:    {}", total_skipped);
-
-    println!("\n  ── Size ──");
-    let total_savings_mb = (total_original as f64 - total_compressed as f64) / 1_048_576.0;
-    println!("    Original:    {:.2} MB", total_original as f64 / 1_048_576.0);
-    println!("    Compressed:  {:.2} MB", total_compressed as f64 / 1_048_576.0);
-    if total_original > total_compressed {
-        println!("    Saved:       {:.2} MB ({:.1}% reduction)", total_savings_mb, overall_savings);
-    } else {
-        println!("    No reduction achieved");
-    }
-
-    if files_status_skipped > 0 {
-        println!("\n  💡 {} file(s) skipped — compression offered no benefit.", files_status_skipped);
-    }
-
-    if files_with_errors > 0 {
-        println!("\n  ⚠️  {} file(s) had errors.", files_with_errors);
-    }
+    println!("-----------------------------------------------------");
+    println!("✅ Succès : {} | ⏭️ Skippés : {} | ❌ Erreurs : {}", files_ok, files_skipped, files_err);
+    println!("💰 Économie totale : {:.2} Mo", total_saved as f64 / 1_048_576.0);
+    println!("-----------------------------------------------------");
 }
