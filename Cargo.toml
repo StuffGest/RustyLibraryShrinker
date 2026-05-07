@@ -1,14 +1,13 @@
 [package]
-name = "compress_comics"
-version = "1.1.1"
+name = "RustyLibraryShrinker"
+version = "1.0.0"
 edition = "2021"
 authors = ["Erik Vullings <erik.vullings@gmail.com>"]
 description = "High-performance comic book compression tool with WebP conversion supporting CBR, CBZ, PDF, and EPUB formats"
 license = "MIT"
-repository = "https://github.com/erikvullings/compress_comics"
-homepage = "https://github.com/erikvullings/compress_comics"
-documentation = "https://docs.rs/compress_comics"
-keywords = ["comic", "compression", "webp", "cbr", "pdf"]
+repository = "https://github.com/StuffGest/RustyLibraryShrinker"
+homepage = "https://github.com/StuffGest/RustyLibraryShrinker"
+keywords = ["comic", "cbr", "cbz", "pdf", "shrink"]
 categories = ["command-line-utilities", "multimedia::images"]
 readme = "README.md"
 
