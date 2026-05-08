@@ -186,26 +186,95 @@ fn detect_type(p: &Path) -> Result<ComicFile> {
 /// # Paramètres
 /// - `stats`: Une table de hachage associant le chemin des fichiers à leurs statistiques.
 fn print_final_summary(stats: &HashMap<PathBuf, ProcessingStats>) {
-    println!("\n📊 RÉSUMÉ FINAL :");
-    let mut total_saved = 0i64;
-    let (mut ok, mut skip, mut err) = (0, 0, 0);
+    let mut total_original = 0u64;
+    let mut total_compressed = 0u64;
+    let mut total_processed = 0;
+    let mut total_skipped = 0;
+    let mut file_errors = 0;
 
-    for (p, s) in stats {
-        let name = p.file_name().unwrap_or_default().to_string_lossy();
-        if let Some(e) = &s.error_message {
-            println!("  ❌ {} : {}", name, e);
-            err += 1;
-        } else if s.compression_skipped {
-            println!("  ⏭️  {} : Pas de gain", name);
-            skip += 1;
+    println!("\n--- DÉTAIL PAR FICHIER ---");
+
+    for (path, s) in stats {
+        total_original += s.original_size;
+        total_compressed += s.compressed_size;
+        total_processed += s.images_processed;
+        total_skipped += s.images_skipped;
+
+        let file_name = path.file_name().unwrap_or_default().to_string_lossy();
+
+        if let Some(err) = &s.error_message {
+            println!("❌ {} : {}", file_name, err);
+            file_errors += 1;
         } else {
-            let saved = s.original_size as i64 - s.compressed_size as i64;
-            total_saved += saved;
-            ok += 1;
-            println!("  ✅ {} : -{:.1} Mo", name, saved as f64 / 1_048_576.0);
+            let diff = s.original_size as f64 - s.compressed_size as f64;
+            let ratio = if s.original_size > 0 {
+                (diff / s.original_size as f64) * 100.0
+            } else {
+                0.0
+            };
+
+            // Gestion de l'icône et du texte de gain
+            // Seuil de 1024 octets (1 Ko) pour considérer qu'il y a un gain
+            if diff.abs() < 1024.0 {
+                println!(
+                    "⏭️  {} : {:.2} Mo -> {:.2} Mo (pas de gain)",
+                    file_name,
+                    s.original_size as f64 / 1_048_576.0,
+                    s.compressed_size as f64 / 1_048_576.0
+                );
+            } else if diff > 0.0 {
+                println!(
+                    "✅ {} : {:.2} Mo -> {:.2} Mo (-{:.1}%)",
+                    file_name,
+                    s.original_size as f64 / 1_048_576.0,
+                    s.compressed_size as f64 / 1_048_576.0,
+                    ratio
+                );
+            } else {
+                // Cas rare où le fichier a légèrement grossi
+                println!(
+                    "⚠️  {} : {:.2} Mo -> {:.2} Mo (+{:.1}%)",
+                    file_name,
+                    s.original_size as f64 / 1_048_576.0,
+                    s.compressed_size as f64 / 1_048_576.0,
+                    ratio.abs()
+                );
+            }
         }
     }
-    println!("-----------------------------------------------------");
-    println!("✅ {} | ⏭️ {} | ❌ {}", ok, skip, err);
-    println!("💰 Économie totale : {:.2} Mo", total_saved as f64 / 1_048_576.0);
+
+    // Calcul du gain global
+    let gain_bytes = if total_original > total_compressed {
+        total_original - total_compressed
+    } else {
+        0
+    };
+
+    let gain_percent = if total_original > 0 {
+        (gain_bytes as f64 / total_original as f64) * 100.0
+    } else {
+        0.0
+    };
+
+    let line = "-".repeat(53);
+    let double_line = "=".repeat(53);
+
+    println!("\n{}", double_line);
+    println!("📊 RÉSUMÉ GLOBAL");
+    println!("{}", line);
+    println!(" Fichiers traités   : {}", stats.len());
+    if file_errors > 0 {
+        println!(" Échecs             : {} ❌", file_errors);
+    }
+    println!(" Images optimisées  : {}", total_processed);
+    println!(" Images ignorées    : {}", total_skipped);
+    println!("{}", line);
+    println!(" Taille originale   : {:.2} Mo", total_original as f64 / 1_048_576.0);
+    println!(" Taille finale      : {:.2} Mo", total_compressed as f64 / 1_048_576.0);
+    println!(
+        " Gain total         : {:.2} Mo ({:.1}%) 📉",
+        gain_bytes as f64 / 1_048_576.0,
+        gain_percent
+    );
+    println!("{}\n", double_line);
 }
