@@ -1,3 +1,14 @@
+//! Gestion des archives compressées ZIP et RAR pour les bandes dessinées.
+//!
+//! Ce module fournit les fonctionnalités nécessaires pour manipuler les formats
+//! d'archives les plus courants dans le monde des comics (CBZ et CBR).
+//!
+//! Les services inclus sont :
+//! - L'extraction complète d'archives ZIP (CBZ).
+//! - L'extraction complète d'archives RAR (CBR).
+//! - La création d'archives CBZ optimisées à partir d'images traitées, en
+//!   garantissant le respect de l'ordre alphabétique des fichiers.
+
 use anyhow::Result;
 use std::fs::{self, File};
 use std::io::{BufReader};
@@ -5,6 +16,17 @@ use std::path::Path;
 use walkdir::WalkDir;
 use zip::{write::FileOptions, ZipWriter};
 
+/// Extrait le contenu d'une archive ZIP vers un répertoire de destination.
+///
+/// Cette méthode parcourt l'index de l'archive et recrée l'arborescence des fichiers
+/// dans le dossier temporaire spécifié.
+///
+/// # Paramètres
+/// - `archive_path`: Le chemin d'accès vers le fichier `.zip` ou `.cbz`.
+/// - `temp_dir`: Le répertoire cible où les fichiers doivent être extraits.
+///
+/// # Erreurs
+/// Retourne une erreur si le fichier est inaccessible ou si le format ZIP est invalide.
 pub fn extract_zip(archive_path: &Path, temp_dir: &Path) -> Result<()> {
     let file = File::open(archive_path)?;
     let reader = BufReader::new(file);
@@ -28,6 +50,17 @@ pub fn extract_zip(archive_path: &Path, temp_dir: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Extrait le contenu d'une archive RAR vers un répertoire de destination.
+///
+/// Utilise la bibliothèque `unrar` pour traiter les archives `.rar` ou `.cbr`.
+///
+/// # Paramètres
+/// - `archive_path`: Le chemin d'accès vers le fichier `.rar` ou `.cbr`.
+/// - `temp_dir`: Le répertoire cible pour l'extraction.
+///
+/// # Erreurs
+/// Retourne une erreur si l'archive est protégée par mot de passe, corrompue
+/// ou si l'extraction échoue.
 pub fn extract_rar(archive_path: &Path, temp_dir: &Path) -> Result<()> {
     let archive = unrar::Archive::new(archive_path)
         .open_for_processing()
@@ -47,9 +80,23 @@ pub fn extract_rar(archive_path: &Path, temp_dir: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Crée une nouvelle archive CBZ (format ZIP) à partir des images traitées.
+///
+/// Cette fonction est cruciale pour l'ordre de lecture : elle trie les fichiers
+/// par nom de manière alphabétique avant de les intégrer dans l'archive.
+/// Elle ne sélectionne que les fichiers au format `.webp`.
+///
+/// # Paramètres
+/// - `source_dir`: Le répertoire contenant les images optimisées.
+/// - `output_path`: Le chemin du fichier `.cbz` final à générer.
+///
+/// # Erreurs
+/// Retourne une erreur si la création du fichier ou l'écriture des données échoue.
 pub fn create_cbz(source_dir: &Path, output_path: &Path) -> Result<()> {
     let file = File::create(output_path)?;
     let mut zip = ZipWriter::new(file);
+
+    // On utilise "Stored" (pas de compression supplémentaire) car les WebP sont déjà compressés.
     let options = FileOptions::<()>::default()
         .compression_method(zip::CompressionMethod::Stored);
 
@@ -59,14 +106,14 @@ pub fn create_cbz(source_dir: &Path, output_path: &Path) -> Result<()> {
         .filter(|e| e.file_type().is_file())
         .collect();
 
-    // TRI ALPHABÉTIQUE OBLIGATOIRE
+    // TRI ALPHABÉTIQUE IMPÉRATIF pour garantir l'ordre de lecture des pages.
     entries.sort_by(|a, b| a.file_name().cmp(&b.file_name()));
 
     for entry in entries {
         let path = entry.path();
         let name = path.file_name().unwrap().to_string_lossy();
 
-        // On n'ajoute que les images (qui sont maintenant en .webp après traitement)
+        // On n'ajoute que les fichiers convertis en .webp
         if name.ends_with(".webp") {
             zip.start_file(name, options)?;
             let mut f = File::open(path)?;
