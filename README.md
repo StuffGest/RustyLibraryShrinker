@@ -89,8 +89,8 @@ RustyLibraryShrinker bd/ --quality 75 --target-height 1600
 
 ### Renommer les fichiers originaux (flux de travail pratique)
 ```bash
-RustyLibraryShrinker bd/ --rename-original --quality 85
-# Résultat : Les originaux deviennent *_original.ext, les fichiers compressés gardent le nom propre.
+RustyLibraryShrinker bd/ --file-mode rename --quality 85
+# Résultat : Les originaux deviennent * (Original).ext, les fichiers compressés gardent le nom propre.
 ```
 
 ### Ignorer les fichiers déjà bien compressés
@@ -107,7 +107,7 @@ RustyLibraryShrinker bd/ --min-savings 10.0  # Compresse uniquement si le gain e
 
 - `--target-height` / `-H` : Hauteur cible des images en pixels (défaut : 1800).
 - `--max-dimension` / `-m` : Dimension maximale de secours (défaut : 1200).
-- `--rename-original` / `-r` : Renomme l'original en `<nom>_original.<ext>` et donne au fichier compressé le nom d'origine.
+- `--file-mode` / `-r` : Renomme l'original en `<nom> (Original).<ext>` et donne au fichier compressé le nom d'origine.
 - `--glob-pattern` / `-g` : Traite uniquement les fichiers correspondant au motif glob.
 - `--min-savings` : Pourcentage d'économie minimal requis pour conserver le fichier (défaut : 5.0).
 - `--verbose` / `-v` : Active la sortie détaillée pour le débogage (utile pour l'analyse des flux PDF).
@@ -144,19 +144,27 @@ RustyLibraryShrinker --glob-pattern "**/*S0[1-3]*.cbr"  # Saisons 1 à 3
 RustyLibraryShrinker --glob-pattern "**/Killer*.cbr" --verbose
 ```
 
-## 📦 Sortie (Output)
+### Gestion des fichiers de sortie (`--file-mode`)
 
-### Comportement par défaut
-L'outil crée de nouveaux fichiers avec le suffixe ` optimized_webp_q{quality}.cbz` :
-- Entrée : `MaBD.cbz` → Sortie : `MaBD optimized_webp_q90.cbz`
-- Entrée : `MaBD.cbr` → Sortie : `MaBD optimized_webp_q90.cbz`
-- Entrée : `MaBD.pdf` → Sortie : `MaBD optimized_webp_q90.cbz`
+L'option `--file-mode` (ou `-m`) permet de choisir entre trois stratégies :
 
-### Avec l'option `--rename-original`
-Le fichier compressé prend le nom d'origine :
-- `MaBD.cbz` → `MaBD_original.cbz` (sauvegarde) + `MaBD.cbz` (compressé)
-- `MaBD.cbr` → `MaBD_original.cbr` (sauvegarde) + `MaBD.cbz` (compressé)
-- `MaBD.pdf` → `MaBD_original.pdf` (sauvegarde) + `MaBD.cbz` (compressé)
+1. **`suffix` (Défaut)** : L'original reste inchangé, un nouveau fichier est créé.
+  - `MaBD.cbz` → `MaBD (Optimized).cbz`
+2. **`rename` (Backup)** : L'original est conservé sous un nouveau nom et le fichier compressé prend la place du nom d'origine.
+  - `MaBD.cbz` → `MaBD (Original).cbz` (sauvegarde) + `MaBD.cbz` (compressé)
+  - `MaBD.cbr` → `MaBD (Original).cbr` (sauvegarde) + `MaBD.cbz` (compressé)
+  - `MaBD.pdf` → `MaBD (Original).pdf` (sauvegarde) + `MaBD.cbz` (compressé)
+3. **`replace` (Remplacement)** : L'original est supprimé et remplacé par le fichier compressé (pas de sauvegarde).
+  - `MaBD.cbr` → (Supprimé) + `MaBD.cbz` (compressé)
+
+**Exemple d'usage :**
+```bash
+# Remplacement direct sans créer de backup
+RustyLibraryShrinker -r replace /chemin/bd/
+
+# Mode avec sauvegarde (comportement classique)
+RustyLibraryShrinker -r rename /chemin/bd/
+```
 
 ## ⚡ Fonctionnalités de Performance
 
@@ -224,7 +232,7 @@ Taille originale : 119.4 Mo → Taille finale : 28.3 Mo
 ### Pourquoi ces résultats ?
 - **Les fichiers PDF** ont souvent les taux de compression les plus élevés car ils contiennent généralement des flux CMYK non compressés ou des scans bruts.
 - **Le format WebP** combiné au **rééchantillonnage Lanczos3** offre un excellent rapport qualité/taille.
-- **--rename-original** rend le flux de travail transparent pour maintenir les noms de votre bibliothèque tout en réduisant drastiquement l'espace disque.
+- **--file-mode rename/replace** rend le flux de travail transparent pour maintenir les noms de votre bibliothèque tout en réduisant drastiquement l'espace disque.
 
 ## 🛠 Détails Techniques
 
