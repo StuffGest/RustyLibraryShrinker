@@ -5,8 +5,19 @@
 //! - La structure de configuration issue de la ligne de commande.
 //! - Les modèles de suivi des statistiques de traitement.
 
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use std::path::PathBuf;
+
+/// Modes de gestion des fichiers de sortie après traitement.
+#[derive(Debug, Clone, Copy, ValueEnum, PartialEq)]
+pub enum FileMode {
+    /// Crée un nouveau fichier avec un suffixe "(Optimized)" (Défaut).
+    Suffix,
+    /// Renomme l'original en "(Original)" et donne le nom d'origine au compressé.
+    Rename,
+    /// Remplace directement l'original (pas de sauvegarde/backup).
+    Replace,
+}
 
 /// Formats de fichiers de bande dessinée pris en charge par l'outil.
 #[derive(Debug, Clone)]
@@ -53,9 +64,9 @@ pub struct Args {
     #[arg(short, long, default_value = "1200")]
     pub max_dimension: u32,
 
-    /// Si activé, l'original est renommé avec le suffixe `_original` et le fichier optimisé prend le nom initial.
-    #[arg(short, long)]
-    pub rename_original: bool,
+    /// Mode de gestion des fichiers de sortie (suffix, rename, replace).
+    #[arg(short = 'r', long, value_enum, default_value_t = FileMode::Suffix)]
+    pub file_mode: FileMode,
 
     /// Utilisation d'un motif de recherche Glob pour filtrer les fichiers (ex: "**/Batman*.cbr").
     #[arg(short, long)]
