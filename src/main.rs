@@ -1,3 +1,5 @@
+#![doc(html_logo_url = "https://raw.githubusercontent.com/StuffGest/RustyLibraryShrinker/master/src/images/logo_transparant_256.png")]
+#![doc(html_favicon_url = "https://raw.githubusercontent.com/StuffGest/RustyLibraryShrinker/master/src/images/favicon.ico")]
 //! Point d'entrée principal de RustyLibraryShrinker.
 //!
 //! Ce module gère l'interface utilisateur en ligne de commande, la découverte
