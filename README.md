@@ -1,3 +1,7 @@
+![logo](./src/images/logo_transparant_256.png "logo")
+
+![releaseRustyLibraryShrinker](./src/images/releaseRustyLibraryShrinker.svg "releaseRustyLibraryShrinker")
+![license](./src/images/license.svg "license")
 # Rust Library Shrinker
 
 **Rust Library Shrinker** est une application Rust haute performance conçue pour compresser les fichiers de bandes dessinées (EPUB/CBR/CBZ/PDF) via un traitement parallèle. Elle convertit les images au format WebP pour une réduction optimale de la taille des fichiers tout en préservant une excellente qualité visuelle.
