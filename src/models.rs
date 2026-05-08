@@ -68,6 +68,10 @@ pub struct Args {
     #[arg(short = 'r', long, value_enum, default_value_t = FileMode::Suffix)]
     pub file_mode: FileMode,
 
+    /// Nombre de threads maximum (0 pour auto)
+    #[arg(short, long, default_value_t = 0)]
+    pub threads: usize,
+
     /// Utilisation d'un motif de recherche Glob pour filtrer les fichiers (ex: "**/Batman*.cbr").
     #[arg(short, long)]
     pub glob_pattern: Option<String>,
@@ -75,6 +79,10 @@ pub struct Args {
     /// Pourcentage minimal de gain de poids requis pour valider le remplacement du fichier original.
     #[arg(long, default_value = "5.0")]
     pub min_savings: f64,
+
+    /// Chemin vers le fichier de log
+    #[arg(short = 'l', long = "log-file")]
+    pub log_file: Option<PathBuf>,
 
     /// Affiche plus d'informations dans la console durant l'exécution.
     #[arg(short, long)]
@@ -107,4 +115,6 @@ pub struct ProcessingStats {
     pub error_message: Option<String>,
     /// Message de statut informatif (ex: "Gain insuffisant").
     pub status_message: Option<String>,
+    /// Nom image ignoree
+    pub skipped_details: Vec<(String, String)>,
 }
