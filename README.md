@@ -1,295 +1,268 @@
 # Rust Library Shrinker
 
-A high-performance Rust application for compressing comic book files (EPUB/CBR/CBZ/PDF) with parallel processing. Converts images to WebP format for optimal file size reduction while maintaining visual quality.
+**Rust Library Shrinker** est une application Rust haute performance conçue pour compresser les fichiers de bandes dessinées (EPUB/CBR/CBZ/PDF) via un traitement parallèle. Elle convertit les images au format WebP pour une réduction optimale de la taille des fichiers tout en préservant une excellente qualité visuelle.
 
-## Features
+## ✨ Caractéristiques
 
-- ✅ **Cross-platform compatibility** - Works on Mac, Windows, and Linux
-- ✅ **Parallel processing** - Processes multiple files and images simultaneously
-- ✅ **Multiple format support** - Handles EPUB, CBR (RAR), CBZ (ZIP), and PDF files with automatic format detection
-- ✅ **Advanced PDF support** - Direct image extraction from PDFs (JPEG, PNG, CMYK, Grayscale)
-- ✅ **Automatic folder processing** - Processes all comic files in a directory by default
-- ✅ **Glob pattern support** - Process selective files using patterns (e.g., "ABC*.cbr")
-- ✅ **Progress visualization** - Docker-style layered progress display
-- ✅ **Intelligent file preservation** - Keeps already well-compressed files unchanged (especially RAR archives)
-- ✅ **Robust error handling** - Continues processing even with corrupt images
-- ✅ **CBZ output format** - Always outputs .cbz files regardless of input format
-- ✅ **Standalone binary** - No external dependencies required
+- ✅ **Compatibilité multiplateforme** - Fonctionne sur Windows, macOS et Linux.
+- ✅ **Parallélisme massif** - Traite simultanément plusieurs fichiers ET plusieurs images à l'intérieur de chaque fichier (parallélisme Rayon imbriqué).
+- ✅ **Support multi-format** - Gère les fichiers EPUB, CBR (RAR), CBZ (ZIP) et PDF avec détection automatique du format.
+- ✅ **Support PDF Avancé** - Extraction directe des images intégrées (JPEG, PNG, JP2, CMYK) avec gestion des **SMasks (transparence)** et des profils **ICC**.
+- ✅ **Support EPUB** - Extraction intelligente respectant l'ordre interne du manifeste.
+- ✅ **Traitement automatique de dossiers** - Traite par défaut tous les fichiers de BD dans un répertoire.
+- ✅ **Support des patterns Glob** - Traitement sélectif via des motifs (ex: "**/ABC*.cbr").
+- ✅ **Visualisation de la progression** - Affichage multicouche style Docker (via Indicatif).
+- ✅ **Préservation intelligente** - Conserve les fichiers déjà bien compressés si le gain est inférieur au seuil défini (5% par défaut).
+- ✅ **Force la compression WebP** - Capable de redimensionner et de re-compresser des fichiers même s'ils sont déjà au format WebP.
+- ✅ **Gestion robuste des erreurs** - Continue le traitement même avec des images corrompues ou des flux PDF inattendus.
+- ✅ **Format de sortie CBZ** - Génère systématiquement des fichiers .cbz standardisés, quel que soit le format d'entrée.
+- ✅ **Binaire autonome** - Aucune dépendance externe requise pour l'exécution.
 
-## Installation
+## 🚀 Installation
 
-### Download Pre-built Linux Binaries (Recommended)
+### Télécharger les binaires pré-compilés pour Linux (Recommandé)
 
-Download the latest release for linux from [GitHub Releases](https://github.com/StuffGest/RustyLibraryShrinker/releases):
+Téléchargez la dernière version pour Linux depuis la page [GitHub Releases](https://github.com/StuffGest/RustyLibraryShrinker/releases) :
 
-- **Linux (x86_64)**: `RustyLibraryShrinker-x86_64-unknown-linux-gnu.tar.gz`
+- **Linux (x86_64)** : `RustyLibraryShrinker-x86_64-unknown-linux-gnu.tar.gz`
 
-#### Linux Installation:
+#### Installation sur Linux :
 ```bash
-# Download and extract (replace URL with latest release)
+# Télécharger et extraire (remplacez l'URL par la dernière version)
 tar -xzf RustyLibraryShrinker-x86_64-unknown-linux-gnu.tar.gz
 chmod +x RustyLibraryShrinker
-sudo mv RustyLibraryShrinker /usr/local/bin/  # Optional: add to PATH
+sudo mv RustyLibraryShrinker /usr/local/bin/  # Optionnel : ajouter au PATH
 ```
 
-### From Source
+### Depuis les sources
 ```bash
-git clone https://github.com/StuffGest/RustyLibraryShrinker.git
+git clone [https://github.com/StuffGest/RustyLibraryShrinker.git](https://github.com/StuffGest/RustyLibraryShrinker.git)
 cd RustyLibraryShrinker
 cargo build --release
 ```
 
-The compiled binary will be available at `target/release/RustyLibraryShrinker`
+Le binaire compilé sera disponible dans `target/release/RustyLibraryShrinker`.
 
-### From crates.io
+## 🛠 Utilisation
+
+### Traiter un fichier unique
 ```bash
-cargo install RustyLibraryShrinker
+RustyLibraryShrinker bd.cbz --quality 85
+RustyLibraryShrinker bd.cbr --quality 85
+RustyLibraryShrinker bd.pdf --quality 85
 ```
 
-## Usage
-
-### Process a single file
-```bash
-RustyLibraryShrinker comic.cbz --quality 85
-RustyLibraryShrinker comic.cbr --quality 85
-RustyLibraryShrinker comic.pdf --quality 85
-```
-
-### Process all comic files in current directory (default behavior)
+### Traiter toutes les BD du répertoire courant (comportement par défaut)
 ```bash
 RustyLibraryShrinker
 ```
 
-### Process all comic files in a specific directory
+### Traiter toutes les BD d'un répertoire spécifique
 ```bash
-RustyLibraryShrinker /path/to/comics/
+RustyLibraryShrinker /chemin/vers/mes/bd/
 ```
 
-### Process files using glob patterns
+### Traiter des fichiers via des patterns glob
 ```bash
-# Simple patterns (automatically searches recursively)
-RustyLibraryShrinker --glob-pattern "ABC*.cbr"        # Files starting with "ABC" anywhere
-RustyLibraryShrinker --glob-pattern "*Killer*.cbr"    # Files containing "Killer" anywhere
+# Motifs simples (recherche récursive automatique)
+RustyLibraryShrinker --glob-pattern "ABC*.cbr"        # Fichiers commençant par "ABC" n'importe où
+RustyLibraryShrinker --glob-pattern "*Killer*.cbr"    # Fichiers contenant "Killer" n'importe où
 
-# Explicit recursive patterns
-RustyLibraryShrinker --glob-pattern "**/De Killer*.cbr"  # Recursive search for "De Killer"
-RustyLibraryShrinker --glob-pattern "**/*Volume*/*.cbz"  # Complex nested patterns
+# Recherche récursive explicite
+RustyLibraryShrinker --glob-pattern "**/De Killer*.cbr"  # Recherche récursive pour "De Killer"
+RustyLibraryShrinker --glob-pattern "**/*Volume*/*.cbz"  # Motifs imbriqués complexes
 
-# Absolute path patterns
-RustyLibraryShrinker --glob-pattern "/full/path/**/Killer*.cbr"  # Full path search
+# Motifs avec chemin absolu
+RustyLibraryShrinker --glob-pattern "/chemin/complet/**/Killer*.cbr"
 
-# Current directory only
-RustyLibraryShrinker --glob-pattern "*.pdf"              # PDF files in current directory
+# Répertoire courant uniquement
+RustyLibraryShrinker --glob-pattern "*.pdf"              # Fichiers PDF dans le dossier courant
 
-# Debug your patterns
-RustyLibraryShrinker --glob-pattern "pattern" --verbose  # Shows found files before processing
+# Déboguer vos motifs
+RustyLibraryShrinker --glob-pattern "motif" --verbose    # Affiche les fichiers trouvés avant traitement
 ```
 
-### Custom settings
+### Paramètres personnalisés
 ```bash
-RustyLibraryShrinker comics/ --quality 75 --target-height 1600
+RustyLibraryShrinker bd/ --quality 75 --target-height 1600
 ```
 
-### Rename original files (convenient workflow)
+### Renommer les fichiers originaux (flux de travail pratique)
 ```bash
-RustyLibraryShrinker comics/ --rename-original --quality 85
-# Result: Original files become *_original.ext, compressed files get clean names
+RustyLibraryShrinker bd/ --rename-original --quality 85
+# Résultat : Les originaux deviennent *_original.ext, les fichiers compressés gardent le nom propre.
 ```
 
-### Skip already well-compressed files
+### Ignorer les fichiers déjà bien compressés
 ```bash
-RustyLibraryShrinker comics/ --min-savings 10.0  # Only compress if >10% savings possible
-# Files with less potential savings are left unchanged (especially useful for RAR archives)
+RustyLibraryShrinker bd/ --min-savings 10.0  # Compresse uniquement si le gain est > 10%
 ```
 
-## Options
+## ⚙️ Options
 
-- `--quality` / `-q`: WebP quality (1-100, default: 90)
-  - 85-95: High quality, moderate compression
-  - 65-80: Balanced quality and size
-  - 40-60: Small files, lower quality
+- `--quality` / `-q` : Qualité WebP (1-100, défaut : 90)
+  - 85-95 : Haute qualité, compression modérée.
+  - 65-80 : Équilibre entre qualité et taille.
+  - 40-60 : Petits fichiers, qualité inférieure.
 
-- `--target-height` / `-H`: Target height for images in pixels (default: 1800)
-- `--max-dimension` / `-m`: Maximum dimension fallback (default: 1200)
-- `--rename-original` / `-r`: Rename original file to `<name>_original.<ext>` and give compressed file the original name
-- `--glob-pattern` / `-g`: Process only files matching the glob pattern (e.g., "ABC*.cbr", "*.pdf")
-- `--min-savings`: Minimum compression savings percentage required to keep compressed file (default: 5.0)
-- `--verbose` / `-v`: Enable detailed output with warnings for debugging (disabled by default for clean output)
+- `--target-height` / `-H` : Hauteur cible des images en pixels (défaut : 1800).
+- `--max-dimension` / `-m` : Dimension maximale de secours (défaut : 1200).
+- `--rename-original` / `-r` : Renomme l'original en `<nom>_original.<ext>` et donne au fichier compressé le nom d'origine.
+- `--glob-pattern` / `-g` : Traite uniquement les fichiers correspondant au motif glob.
+- `--min-savings` : Pourcentage d'économie minimal requis pour conserver le fichier (défaut : 5.0).
+- `--verbose` / `-v` : Active la sortie détaillée pour le débogage (utile pour l'analyse des flux PDF).
+- `--skip-compression` / `-S` : Mode conversion uniquement : préserve les images originales sans ré-encodage.
 
-## Glob Pattern Tips
+## 💡 Astuces pour les Patterns Glob
 
-Glob patterns use wildcards to match file paths:
-- `*` matches any characters within a directory name
-- `**` matches any number of directories (recursive)
-- `?` matches a single character
-- `[abc]` matches any character in brackets
+Les patterns glob utilisent des jokers pour correspondre aux chemins :
+- `*` correspond à n'importe quel caractère dans un nom de dossier ou fichier.
+- `**` correspond à n'importe quel nombre de répertoires (récursif).
+- `?` correspond à un seul caractère.
+- `[abc]` correspond à n'importe quel caractère entre les crochets.
 
-### Common Scenarios
+### Scénarios courants
 
-**Find files by series name anywhere in directory tree:**
+**Trouver une série par nom n'importe où dans l'arborescence :**
 ```bash
 RustyLibraryShrinker --glob-pattern "**/De Killer*.cbr"
 ```
 
-**Find files in specific nested structure:**
+**Trouver des fichiers dans une structure imbriquée spécifique :**
 ```bash
-RustyLibraryShrinker --glob-pattern "**/Striparchief*/**/De Killer*.cbr"
+RustyLibraryShrinker --glob-pattern "**/Archives*/**/De Killer*.cbr"
 ```
 
-**Find files with specific volume numbers:**
+**Trouver des volumes spécifiques :**
 ```bash
 RustyLibraryShrinker --glob-pattern "**/*Volume 1*.cbr"
-RustyLibraryShrinker --glob-pattern "**/*S0[1-3]*.cbr"  # Seasons 1-3
+RustyLibraryShrinker --glob-pattern "**/*S0[1-3]*.cbr"  # Saisons 1 à 3
 ```
 
-**Use verbose mode to debug patterns:**
+**Utiliser le mode verbeux pour déboguer :**
 ```bash
 RustyLibraryShrinker --glob-pattern "**/Killer*.cbr" --verbose
 ```
-This shows exactly which files were found before processing.
 
-## Output
+## 📦 Sortie (Output)
 
-### Default Behavior
-The tool creates new files with the suffix ` optimized_webp_q{quality}.cbz`:
-- Input: `MyComic.cbz` → Output: `MyComic optimized_webp_q90.cbz`
-- Input: `MyComic.cbr` → Output: `MyComic optimized_webp_q90.cbz`
-- Input: `MyComic.pdf` → Output: `MyComic optimized_webp_q90.cbz`
+### Comportement par défaut
+L'outil crée de nouveaux fichiers avec le suffixe ` optimized_webp_q{quality}.cbz` :
+- Entrée : `MaBD.cbz` → Sortie : `MaBD optimized_webp_q90.cbz`
+- Entrée : `MaBD.cbr` → Sortie : `MaBD optimized_webp_q90.cbz`
+- Entrée : `MaBD.pdf` → Sortie : `MaBD optimized_webp_q90.cbz`
 
-### With `--rename-original` Option
-When using `--rename-original`, the compressed file takes the original name:
-- `MyComic.cbz` → `MyComic_original.cbz` (backup) + `MyComic.cbz` (compressed)
-- `MyComic.cbr` → `MyComic_original.cbr` (backup) + `MyComic.cbz` (compressed)
-- `MyComic.pdf` → `MyComic_original.pdf` (backup) + `MyComic.cbz` (compressed)
+### Avec l'option `--rename-original`
+Le fichier compressé prend le nom d'origine :
+- `MaBD.cbz` → `MaBD_original.cbz` (sauvegarde) + `MaBD.cbz` (compressé)
+- `MaBD.cbr` → `MaBD_original.cbr` (sauvegarde) + `MaBD.cbz` (compressé)
+- `MaBD.pdf` → `MaBD_original.pdf` (sauvegarde) + `MaBD.cbz` (compressé)
 
-## Performance Features
+## ⚡ Fonctionnalités de Performance
 
-### Parallel Processing
-- Files are processed in parallel using all available CPU cores
-- Images within each file are also processed in parallel
-- Progress is displayed for each file simultaneously
+### Traitement Parallèle
+- Les fichiers sont traités en parallèle via un pool de threads (work-stealing).
+- Les images à l'intérieur de chaque fichier sont également traitées en parallèle.
+- La progression est affichée simultanément pour chaque fichier sans scintillement du terminal.
 
-### Smart Compression
-- Automatically detects two-page spreads and adjusts processing
-- Skips already well-compressed files
+### Compression Intelligente
+- **Ré-compression forcée** : Ré-encode systématiquement même si la source est en WebP pour garantir les dimensions et la qualité cibles.
+- **Vérification du gain** : Revient automatiquement à l'original si le nouveau fichier ne respecte pas le seuil `--min-savings`.
 
-### Memory Efficient
-- Uses temporary directories for processing
-- Automatic cleanup after completion
-- Streaming archive processing
+### Efficacité Mémoire
+- Utilise des répertoires temporaires sécurisés (via `tempfile`).
+- Nettoyage automatique des images extraites après chaque fichier.
+- Flux efficace pour la création d'archives volumineuses.
 
-## Progress Display
+## 📊 Affichage de la Progression
 
-The tool shows progress similar to Docker image downloads:
+L'outil affiche la progression de manière similaire aux téléchargements d'images Docker :
 
-```
+```text
 🚀 Found 3 comic file(s) to process
 Settings: Quality=90, Target Height=1800px
 -----------------------------------------------------
-⠋ [00:01:23] [████████████████████████████████████████] 2/3 files (00:00:45)
-  📖 Comic1.cbz [████████████████████████████████] 100%
-  📖 Comic2.cbz [████████████████░░░░░░░░░░░░░░░░] 65%
-  📖 Comic3.cbz [████░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 15%
+⠋ [████████████████████████████████████████] 2/3 fichiers (00:00:45)
+📖 BD1.cbz [████████████████████████████████] 100%
+📖 BD2.cbz [████████████████░░░░░░░░░░░░░░░░] 65%
+📖 BD3.cbz [████░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 15%
 ```
 
-## Summary Report
+## 📊 Rapport de Résumé
 
-After processing, the tool provides a detailed summary:
+Après le traitement, l'outil fournit un résumé détaillé :
 
-```
-📊 Processing Summary:
+```text
+📊 RÉSUMÉ FINAL :
+✅ BD1.cbz : -45.2 Mo (42.1% d'économie)
+✅ BD2.cbz : -32.1 Mo (38.7% d'économie)
+⏭️  BD3.cbz : Pas de gain (Ignoré)
 -----------------------------------------------------
-📖 Comic1.cbz: 45.2% savings (23 images processed, 2 skipped)
-📖 Comic2.cbz: 38.7% savings (18 images processed, 1 skipped)
-
-🎯 Overall Results:
-   Total files processed: 2
-   Total images processed: 41
-   Total images skipped: 3
-   Overall size reduction: 42.1%
-   Original size: 125.43 MB
-   Compressed size: 72.65 MB
-
-💡 1 file(s) were already well-compressed and showed minimal improvement.
+✅ 2 | ⏭️ 1 | ❌ 0
+💰 Économie totale : 77.3 Mo
 ```
 
-## Real-World Results
+## 📉 Résultats Réels
 
-### CBR/CBZ Files
-```
-📖 Amber Blake - 01.cbr: 61.1% savings (77.9 MB saved, 104 images processed, 0 skipped)
-📖 Auschwitz - 01.cbr: 67.9% savings (74.9 MB saved, 84 images processed, 0 skipped)
+### Fichiers CBR/CBZ
+```text
+📖 Amber Blake - 01.cbr: 61.1% d'économie (77.9 Mo sauvés, 104 images traitées, 0 ignorées)
+📖 Auschwitz - 01.cbr: 67.9% d'économie (74.9 Mo sauvés, 84 images traitées, 0 ignorées)
 
-Overall size reduction: 64.3% (152.8 MB saved)
-Original size: 237.8 MB → Final size: 85.0 MB
-```
-
-### PDF Files
-```
-📖 Brocéliande - Tome 67.pdf: 76.3% savings (91.1 MB saved, 55 images processed, 0 skipped)
-
-Overall size reduction: 76.3% (91.1 MB saved)
-Original size: 119.4 MB → Final size: 28.3 MB
+Réduction totale : 64.3% (152.8 Mo sauvés)
+Taille originale : 237.8 Mo → Taille finale : 85.0 Mo
 ```
 
-### With `--rename-original` Option
-```
-📖 comic1.cbz: 76.4% savings (84 images processed, 0 skipped)
-📖 comic2.cbz: 81.1% savings (55 images processed, 0 skipped)
+### Fichiers PDF
+```text
+📖 Brocéliande - Tome 06.pdf: 76.3% d'économie (91.1 Mo sauvés, 55 images traitées, 0 ignorées)
 
-Before: comic1.cbr (115.75 MB), comic2.pdf (125.21 MB)
-After:  comic1_original.cbr (backup), comic2_original.pdf (backup)
-        comic1.cbz (27.35 MB), comic2.cbz (23.71 MB)
-
-Total: 229.80 MB → 48.69 MB (78.8% savings)
+Réduction totale : 76.3% (91.1 Mo sauvés)
+Taille originale : 119.4 Mo → Taille finale : 28.3 Mo
 ```
 
-### Why These Results?
-- **PDF files often have the highest compression ratios** because they typically contain uncompressed or lightly compressed images
-- **CBR/CBZ files vary** depending on original compression - some modern files are already well-optimized
-- **WebP format** provides excellent quality-to-size ratio, especially for comic book artwork
-- **--rename-original** makes workflow seamless - no manual file management needed
+### Pourquoi ces résultats ?
+- **Les fichiers PDF** ont souvent les taux de compression les plus élevés car ils contiennent généralement des flux CMYK non compressés ou des scans bruts.
+- **Le format WebP** combiné au **rééchantillonnage Lanczos3** offre un excellent rapport qualité/taille.
+- **--rename-original** rend le flux de travail transparent pour maintenir les noms de votre bibliothèque tout en réduisant drastiquement l'espace disque.
 
-## Technical Details
+## 🛠 Détails Techniques
 
-- **Language**: Rust (standalone binary, no runtime dependencies)
-- **Image Processing**: High-quality Lanczos3 resampling
-- **Compression**: WebP lossy compression with configurable quality
-- **Archive Format**: ZIP-based CBZ files (universal comic reader compatibility)
-- **Extraction**: 
-  - **CBR files**: Native RAR support with ZIP fallback for compatibility
-  - **CBZ files**: Native ZIP extraction
-  - **PDF files**: Direct embedded image extraction (JPEG, PNG, CMYK, Grayscale)
-- **Threading**: Rayon for work-stealing parallelism
+- **Langage** : Rust (binaire autonome, zéro dépendance au runtime).
+- **Traitement d'image** : Rééchantillonnage Lanczos3 de haute qualité via la crate `image`.
+- **Compression** : Encodage WebP via la crate `webp`.
+- **Format d'archive** : Fichiers CBZ basés sur le format ZIP standard.
+- **Moteurs d'extraction** :
+  - **CBR** : Support natif via `unrar`.
+  - **CBZ** : Crate `zip`.
+  - **PDF** : Extraction avancée via `lopdf` avec gestion ICC et SMask.
+  - **EPUB** : Extraction basée sur le manifeste de ressources.
+- **Multi-threading** : Rayon pour un parallélisme à haute efficacité.
 
-## PDF Support Details
+## 📄 Détails du Support PDF
 
-The tool provides comprehensive PDF support for comic books:
+### ✅ Formats d'images PDF supportés
+- **JPEG (DCTDecode)** : Extraction directe ou ré-encodage.
+- **PNG/Compressé (FlateDecode)** : Reconstruction complète.
+- **JPEG 2000 (JPXDecode)** : Supporté avec conversion de couleur ICC.
+- **SMasks** : Application automatique du canal alpha pour les images transparentes.
+- **CMYK** : Conversion automatique vers l'espace sRGB.
 
-### ✅ Supported PDF Image Formats
-- **JPEG (DCTDecode)**: Direct extraction with no quality loss
-- **PNG/Compressed (FlateDecode)**: Decompression and reconstruction
-- **Raw RGB/Grayscale**: Uncompressed pixel data extraction
-- **CMYK Images**: Automatic conversion to RGB color space
+### ⚠️ Formats PDF non supportés
+- **Graphismes vectoriels complexes** : Seules les images matricielles (raster) sont traitées.
+- **Compression CCITT Fax** : Généralement ignorée pour les BD (utilisée pour les documents texte).
 
-### ⚠️ Unsupported PDF Formats
-- **CCITT Fax compression**: Skipped with informative message
-- **Complex vector graphics**: Only embedded raster images are extracted
-- **Text-only PDFs**: No images to extract
+## ⚠️ Limitations
 
-## Limitations
+- La sortie est strictement standardisée au format CBZ.
+- Les pages PDF contenant uniquement du vecteur n'auront pas d'images extraites.
+- La taille du binaire est optimisée via LTO et le "stripping" pour la distribution.
 
-- Output uses ZIP compression for CBZ files
-- WebP format may not be supported by very old comic readers
-- PDF vector graphics are not rasterized (only embedded images are extracted)
+## 📦 Compilation pour Distribution
 
-## Building for Distribution
-
-To build optimized binaries for distribution:
+Pour compiler des binaires optimisés :
 
 ```bash
 cargo build --release
-strip target/release/RustyLibraryShrinker  # Optional: reduce binary size
+strip target/release/RustyLibraryShrinker  # Réduit la taille du binaire
 ```
-
-The resulting binary is self-contained and can be distributed without any dependencies.
