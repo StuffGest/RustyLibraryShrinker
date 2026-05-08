@@ -10,6 +10,7 @@
 
 - ✅ **Compatibilité multiplateforme** - Fonctionne sur Windows, macOS et Linux.
 - ✅ **Parallélisme massif** - Traite simultanément plusieurs fichiers ET plusieurs images à l'intérieur de chaque fichier (parallélisme Rayon imbriqué).
+- ✅ **Contrôle des ressources** - Possibilité de limiter le nombre de threads maximum via l'option `--threads`.
 - ✅ **Support multi-format** - Gère les fichiers EPUB, CBR (RAR), CBZ (ZIP) et PDF avec détection automatique du format.
 - ✅ **Support PDF Avancé** - Extraction directe des images intégrées (JPEG, PNG, JP2, CMYK) avec gestion des **SMasks (transparence)** et des profils **ICC**.
 - ✅ **Support EPUB** - Extraction intelligente respectant l'ordre interne du manifeste.
@@ -17,8 +18,9 @@
 - ✅ **Support des patterns Glob** - Traitement sélectif via des motifs (ex: "**/ABC*.cbr").
 - ✅ **Visualisation de la progression** - Affichage multicouche style Docker (via Indicatif).
 - ✅ **Préservation intelligente** - Conserve les fichiers déjà bien compressés si le gain est inférieur au seuil défini (5% par défaut).
+- ✅ **Gestion des logs** - Sortie détaillée en texte brut pour le suivi des erreurs et des succès via `--log-file`.
 - ✅ **Force la compression WebP** - Capable de redimensionner et de re-compresser des fichiers même s'ils sont déjà au format WebP.
-- ✅ **Gestion robuste des erreurs** - Continue le traitement même avec des images corrompues ou des flux PDF inattendus.
+- ✅ **Gestion robuste des erreurs** - Continue le traitement même avec des images corrompues ou hors limites WebP (max 16383px).
 - ✅ **Format de sortie CBZ** - Génère systématiquement des fichiers .cbz standardisés, quel que soit le format d'entrée.
 - ✅ **Binaire autonome** - Aucune dépendance externe requise pour l'exécution.
 
@@ -26,9 +28,7 @@
 
 ### Télécharger les binaires pré-compilés pour Linux (Recommandé)
 
-Téléchargez la dernière version pour Linux depuis la page [GitHub Releases](https://github.com/StuffGest/RustyLibraryShrinker/releases) :
-
-- **Linux (x86_64)** : `RustyLibraryShrinker-x86_64-unknown-linux-gnu.tar.gz`
+Téléchargez la dernière version pour Linux depuis la page [GitHub Releases](https://github.com/StuffGest/RustyLibraryShrinker/releases).
 
 #### Installation sur Linux :
 ```bash
@@ -61,9 +61,15 @@ RustyLibraryShrinker bd.pdf --quality 85
 RustyLibraryShrinker
 ```
 
-### Traiter toutes les BD d'un répertoire spécifique
+### Limiter l'usage CPU (Threads)
 ```bash
-RustyLibraryShrinker /chemin/vers/mes/bd/
+# Utilise seulement 4 threads pour rester fluide sur d'autres tâches
+RustyLibraryShrinker --threads 4
+```
+
+### Générer un rapport de log
+```bash
+RustyLibraryShrinker /chemin/vers/bd/ --log-file session_shinker.log
 ```
 
 ### Traiter des fichiers via des patterns glob
@@ -110,8 +116,10 @@ RustyLibraryShrinker bd/ --min-savings 10.0  # Compresse uniquement si le gain e
   - 40-60 : Petits fichiers, qualité inférieure.
 
 - `--target-height` / `-H` : Hauteur cible des images en pixels (défaut : 1800).
+- `--threads` / `-t` : Nombre de threads maximum (défaut : 0 pour auto).
+- `--log-file` / `-l` : Chemin vers un fichier texte brut pour enregistrer le déroulement.
 - `--max-dimension` / `-m` : Dimension maximale de secours (défaut : 1200).
-- `--file-mode` / `-r` : Renomme l'original en `<nom> (Original).<ext>` et donne au fichier compressé le nom d'origine.
+- `--file-mode` / `-r` : Mode de gestion des fichiers (`suffix`, `rename`, `replace`).
 - `--glob-pattern` / `-g` : Traite uniquement les fichiers correspondant au motif glob.
 - `--min-savings` : Pourcentage d'économie minimal requis pour conserver le fichier (défaut : 5.0).
 - `--verbose` / `-v` : Active la sortie détaillée pour le débogage (utile pour l'analyse des flux PDF).
@@ -178,7 +186,6 @@ RustyLibraryShrinker -r rename /chemin/bd/
 - La progression est affichée simultanément pour chaque fichier sans scintillement du terminal.
 
 ### Compression Intelligente
-- **Ré-compression forcée** : Ré-encode systématiquement même si la source est en WebP pour garantir les dimensions et la qualité cibles.
 - **Vérification du gain** : Revient automatiquement à l'original si le nouveau fichier ne respecte pas le seuil `--min-savings`.
 
 ### Efficacité Mémoire
@@ -187,8 +194,6 @@ RustyLibraryShrinker -r rename /chemin/bd/
 - Flux efficace pour la création d'archives volumineuses.
 
 ## 📊 Affichage de la Progression
-
-L'outil affiche la progression de manière similaire aux téléchargements d'images Docker :
 
 ```text
 🚀 Found 3 comic file(s) to process
@@ -200,18 +205,29 @@ Settings: Quality=90, Target Height=1800px
 📖 BD3.cbz [████░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 15%
 ```
 
-## 📊 Rapport de Résumé
-
-Après le traitement, l'outil fournit un résumé détaillé :
+## 📊 Rapport de Résumé (Log / Terminal)
 
 ```text
-📊 RÉSUMÉ FINAL :
-✅ BD1.cbz : -45.2 Mo (42.1% d'économie)
-✅ BD2.cbz : -32.1 Mo (38.7% d'économie)
-⏭️  BD3.cbz : Pas de gain (Ignoré)
+--- DÉTAIL PAR FICHIER ---
+✅ BD1.cbz : 85.12 Mo -> 42.10 Mo (-50.5%)
+⏭️  BD2.cbz : 12.05 Mo -> 12.05 Mo (pas de gain)
+❌ BD3.pdf : Image corrompue ou dimension invalide
+
+=====================================================
+📊 RÉSUMÉ GLOBAL
 -----------------------------------------------------
-✅ 2 | ⏭️ 1 | ❌ 0
-💰 Économie totale : 77.3 Mo
+Fichiers total     : 3
+Optimisés          : 2 ✅
+Non optimisés      : 1 ⏭️
+Échecs             : 0 ❌
+-----------------------------------------------------
+Images optimisées  : 154
+Images ignorées    : 1
+-----------------------------------------------------
+Taille originale   : 97.17 Mo
+Taille finale      : 54.15 Mo
+Gain total         : 43.02 Mo (44.3%) 📉
+=====================================================
 ```
 
 ## 📉 Résultats Réels
@@ -219,24 +235,14 @@ Après le traitement, l'outil fournit un résumé détaillé :
 ### Fichiers CBR/CBZ
 ```text
 📖 Amber Blake - 01.cbr: 61.1% d'économie (77.9 Mo sauvés, 104 images traitées, 0 ignorées)
-📖 Auschwitz - 01.cbr: 67.9% d'économie (74.9 Mo sauvés, 84 images traitées, 0 ignorées)
-
 Réduction totale : 64.3% (152.8 Mo sauvés)
-Taille originale : 237.8 Mo → Taille finale : 85.0 Mo
 ```
 
 ### Fichiers PDF
 ```text
 📖 Brocéliande - Tome 06.pdf: 76.3% d'économie (91.1 Mo sauvés, 55 images traitées, 0 ignorées)
-
-Réduction totale : 76.3% (91.1 Mo sauvés)
 Taille originale : 119.4 Mo → Taille finale : 28.3 Mo
 ```
-
-### Pourquoi ces résultats ?
-- **Les fichiers PDF** ont souvent les taux de compression les plus élevés car ils contiennent généralement des flux CMYK non compressés ou des scans bruts.
-- **Le format WebP** combiné au **rééchantillonnage Lanczos3** offre un excellent rapport qualité/taille.
-- **--file-mode rename/replace** rend le flux de travail transparent pour maintenir les noms de votre bibliothèque tout en réduisant drastiquement l'espace disque.
 
 ## 🛠 Détails Techniques
 
@@ -272,9 +278,7 @@ Taille originale : 119.4 Mo → Taille finale : 28.3 Mo
 
 ## 📦 Compilation pour Distribution
 
-Pour compiler des binaires optimisés :
-
 ```bash
 cargo build --release
-strip target/release/RustyLibraryShrinker  # Réduit la taille du binaire
+strip target/release/RustyLibraryShrinker
 ```
