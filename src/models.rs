@@ -1,73 +1,99 @@
+//! Définitions des structures de données et des types fondamentaux.
+//!
+//! Ce module contient les types partagés à travers toute l'application :
+//! - Les énumérations des formats supportés.
+//! - La structure de configuration issue de la ligne de commande.
+//! - Les modèles de suivi des statistiques de traitement.
+
 use clap::Parser;
 use std::path::PathBuf;
 
-/// Types de fichiers de bande dessinée supportés
+/// Formats de fichiers de bande dessinée pris en charge par l'outil.
 #[derive(Debug, Clone)]
 pub enum ComicType {
+    /// Comic Book Zip : Archives au format ZIP.
     Cbz,
+    /// Comic Book Rar : Archives au format RAR.
     Cbr,
+    /// Portable Document Format.
     Pdf,
+    /// Electronic Publication : Livres numériques.
     Epub,
 }
 
-/// Structure représentant un fichier à traiter
+/// Représente un fichier de bande dessinée identifié pour le traitement.
 #[derive(Debug, Clone)]
 pub struct ComicFile {
+    /// Chemin absolu ou relatif vers le fichier sur le disque.
     pub path: PathBuf,
+    /// Type de fichier détecté par son extension.
     pub file_type: ComicType,
 }
 
-/// Arguments de la ligne de commande
+/// Configuration globale de l'application extraite des arguments CLI.
+///
+/// Gère les paramètres de qualité d'image, les dimensions de sortie
+/// et les options de manipulation de fichiers.
 #[derive(Parser, Debug, Clone)]
 #[command(author, version, about = "Compresseur de BD, Mangas et Comics vers CBZ", long_about = None)]
 pub struct Args {
-    /// Fichier ou répertoire d'entrée
+    /// Chemin vers le fichier unique ou le répertoire contenant les archives à traiter.
     #[arg(value_name = "INPUT")]
     pub input: Option<PathBuf>,
 
-    /// Qualité WebP (1-100, défaut : 90)
+    /// Niveau de qualité pour l'encodage WebP (de 1 à 100). Une valeur de 90 offre un excellent rapport poids/qualité.
     #[arg(short, long, default_value = "90")]
     pub quality: u8,
 
-    /// Hauteur cible pour les images (défaut : 1800)
+    /// Hauteur cible en pixels pour le redimensionnement des pages.
     #[arg(short = 'H', long, default_value = "1800")]
     pub target_height: u32,
 
-    /// Dimension maximale de repli (défaut : 1200)
+    /// Dimension maximale de sécurité utilisée en cas d'impossibilité de déterminer le ratio.
     #[arg(short, long, default_value = "1200")]
     pub max_dimension: u32,
 
-    /// Renomme l'original en _original et donne le nom d'origine au compressé
+    /// Si activé, l'original est renommé avec le suffixe `_original` et le fichier optimisé prend le nom initial.
     #[arg(short, long)]
     pub rename_original: bool,
 
-    /// Motif Glob pour la sélection (ex: "**/Batman*.cbr")
+    /// Utilisation d'un motif de recherche Glob pour filtrer les fichiers (ex: "**/Batman*.cbr").
     #[arg(short, long)]
     pub glob_pattern: Option<String>,
 
-    /// Économie minimale requise pour conserver le fichier (défaut : 5%)
+    /// Pourcentage minimal de gain de poids requis pour valider le remplacement du fichier original.
     #[arg(long, default_value = "5.0")]
     pub min_savings: f64,
 
-    /// Active la sortie détaillée
+    /// Affiche plus d'informations dans la console durant l'exécution.
     #[arg(short, long)]
     pub verbose: bool,
 
-    /// Mode conversion seule : conserve les images originales sans compression
+    /// Désactive la compression des images : convertit uniquement le conteneur vers le format CBZ.
     #[arg(short = 'S', long)]
     pub skip_compression: bool,
 }
 
-/// Statistiques de traitement pour un fichier
+/// Résultat détaillé du traitement d'un fichier.
+///
+/// Utilisé pour générer le rapport final à l'utilisateur.
 #[allow(dead_code)]
 #[derive(Debug)]
 pub struct ProcessingStats {
+    /// Taille du fichier original en octets.
     pub original_size: u64,
+    /// Taille du fichier généré après optimisation.
     pub compressed_size: u64,
+    /// Nombre d'images traitées avec succès.
     pub images_processed: usize,
+    /// Nombre d'images ignorées (erreurs ou formats non supportés).
     pub images_skipped: usize,
+    /// Indique si la compression a été annulée faute de gain suffisant.
     pub compression_skipped: bool,
+    /// Chemin final du fichier généré.
     pub output_path: Option<PathBuf>,
+    /// Message détaillé en cas d'erreur lors du pipeline.
     pub error_message: Option<String>,
+    /// Message de statut informatif (ex: "Gain insuffisant").
     pub status_message: Option<String>,
 }
