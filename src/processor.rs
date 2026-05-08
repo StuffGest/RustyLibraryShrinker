@@ -17,7 +17,7 @@ use rayon::prelude::*;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
-use crate::models::{Args, ComicFile, ProcessingStats};
+use crate::models::{Args, ComicFile, ProcessingStats, FileMode};
 use crate::archive::{self, zip_rar};
 use crate::image_utils;
 
@@ -83,7 +83,7 @@ pub fn process_comic_file(comic: &ComicFile, args: &Args, progress: &ProgressBar
         });
     }
 
-    // 6. Déplacement final et renommage
+    // 6. Déplacement final et renommage (gestion des 3 cas)
     let final_path = finalize_output_paths(comic, &temp_out, args)?;
 
     Ok(ProcessingStats {
@@ -180,18 +180,30 @@ fn finalize_output_paths(comic: &ComicFile, temp_out: &Path, args: &Args) -> Res
     let stem = comic.path.file_stem().unwrap().to_string_lossy();
     let original_ext = comic.path.extension().and_then(|e| e.to_str()).unwrap_or("");
 
-    if args.rename_original {
-        // Masque de renommage : <nom>_original.<ext>
-        let backup_name = format!("{}_original.{}", stem, original_ext);
-        let backup_path = parent.join(backup_name);
-        fs::rename(&comic.path, &backup_path)?;
+    match args.file_mode {
+        FileMode::Suffix => {
+            let dest = parent.join(format!("{} (Optimized).cbz", stem));
+            fs::rename(temp_out, &dest)?;
+            Ok(dest)
+        },
+        FileMode::Rename => {
+            let backup_name = format!("{} (Original).{}", stem, original_ext);
+            let backup_path = parent.join(backup_name);
+            fs::rename(&comic.path, &backup_path)?;
 
-        let dest = parent.join(format!("{}.cbz", stem));
-        fs::rename(temp_out, &dest)?;
-        Ok(dest)
-    } else {
-        let dest = parent.join(format!("{} (Optimized).cbz", stem));
-        fs::rename(temp_out, &dest)?;
-        Ok(dest)
+            let dest = parent.join(format!("{}.cbz", stem));
+            fs::rename(temp_out, &dest)?;
+            Ok(dest)
+        },
+        FileMode::Replace => {
+            let dest = parent.join(format!("{}.cbz", stem));
+            if comic.path != dest {
+                fs::remove_file(&comic.path)?;
+            } else if dest.exists() {
+                fs::remove_file(&dest)?;
+            }
+            fs::rename(temp_out, &dest)?;
+            Ok(dest)
+        }
     }
 }
