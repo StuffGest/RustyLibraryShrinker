@@ -20,8 +20,10 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use rayon::prelude::*;
+use simplelog::*;
 use std::collections::HashMap;
 use std::fs;
+use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use walkdir::WalkDir;
@@ -32,6 +34,32 @@ use crate::models::{Args, ComicFile, ComicType, ProcessingStats};
 fn main() -> Result<()> {
     let args = Args::parse();
     let input_path = args.input.clone().unwrap_or_else(|| PathBuf::from("."));
+
+    // --- Initialisation des Logs ---
+    let mut loggers: Vec<Box<dyn SharedLogger>> = Vec::new();
+    if let Some(log_path) = &args.log_file {
+        if let Ok(file) = File::create(log_path) {
+            loggers.push(WriteLogger::new(
+                LevelFilter::Info,
+                Config::default(),
+                file,
+            ));
+        }
+    }
+    // On ne met pas de TermLogger ici pour ne pas polluer l'affichage d'indicatif
+    if !loggers.is_empty() {
+        CombinedLogger::init(loggers).unwrap();
+    }
+
+    log::info!("🚀 Démarrage de RustyLibraryShrinker");
+
+    // Configuration du nombre de threads
+    if args.threads > 0 {
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(args.threads)
+            .build_global()
+            .context("Impossible de configurer le pool de threads")?;
+    }
 
     // 1. Découverte des fichiers (Logique Glob Récursive)
     let files = if let Some(pattern) = &args.glob_pattern {
@@ -58,6 +86,7 @@ fn main() -> Result<()> {
 
     if files.is_empty() {
         println!("❌ Aucun fichier trouvé.");
+        log::warn!("Aucun fichier trouvé pour le chemin : {:?}", input_path);
         return Ok(());
     }
 
@@ -89,9 +118,28 @@ fn main() -> Result<()> {
         // Délégation du travail au processeur
         match processor::process_comic_file(f, &args, &pb) {
             Ok(s) => {
+                // Log des images ignorées s'il y en a (placé ici car 's' est disponible)
+                if !s.skipped_details.is_empty() {
+                    for (img_name, reason) in &s.skipped_details {
+                        log::warn!(
+                            "  [IMAGE SKIPPED] Archive: {} | Image: {} | Raison: {}",
+                            file_name,
+                            img_name,
+                            reason
+                        );
+                    }
+                }
+
+                let diff = s.original_size as f64 - s.compressed_size as f64;
+                if diff.abs() < 1024.0 {
+                    log::info!("SKIP: {} (gain insuffisant)", file_name);
+                } else {
+                    log::info!("SUCCESS: {} (-{:.1}%)", file_name, (diff / s.original_size as f64) * 100.0);
+                }
                 stats_map.lock().unwrap().insert(f.path.clone(), s);
             }
             Err(e) => {
+                log::error!("ERROR: {} -> {}", file_name, e);
                 let mut m = stats_map.lock().unwrap();
                 let size = fs::metadata(&f.path).map(|m| m.len()).unwrap_or(0);
                 m.insert(f.path.clone(), ProcessingStats {
@@ -99,6 +147,7 @@ fn main() -> Result<()> {
                     compressed_size: size,
                     images_processed: 0,
                     images_skipped: 0,
+                    skipped_details: Vec::new(),
                     compression_skipped: false,
                     output_path: None,
                     error_message: Some(e.to_string()),
@@ -191,6 +240,8 @@ fn print_final_summary(stats: &HashMap<PathBuf, ProcessingStats>) {
     let mut total_processed = 0;
     let mut total_skipped = 0;
     let mut file_errors = 0;
+    let mut files_optimized = 0;
+    let mut files_not_optimized = 0;
 
     println!("\n--- DÉTAIL PAR FICHIER ---");
 
@@ -207,74 +258,52 @@ fn print_final_summary(stats: &HashMap<PathBuf, ProcessingStats>) {
             file_errors += 1;
         } else {
             let diff = s.original_size as f64 - s.compressed_size as f64;
-            let ratio = if s.original_size > 0 {
-                (diff / s.original_size as f64) * 100.0
-            } else {
-                0.0
-            };
+            let ratio = if s.original_size > 0 { (diff / s.original_size as f64) * 100.0 } else { 0.0 };
 
             // Gestion de l'icône et du texte de gain
             // Seuil de 1024 octets (1 Ko) pour considérer qu'il y a un gain
             if diff.abs() < 1024.0 {
-                println!(
-                    "⏭️  {} : {:.2} Mo -> {:.2} Mo (pas de gain)",
-                    file_name,
-                    s.original_size as f64 / 1_048_576.0,
-                    s.compressed_size as f64 / 1_048_576.0
-                );
+                println!("⏭️  {} : {:.2} Mo -> {:.2} Mo (pas de gain)", file_name, s.original_size as f64 / 1_048_576.0, s.compressed_size as f64 / 1_048_576.0);
+                files_not_optimized += 1;
             } else if diff > 0.0 {
-                println!(
-                    "✅ {} : {:.2} Mo -> {:.2} Mo (-{:.1}%)",
-                    file_name,
-                    s.original_size as f64 / 1_048_576.0,
-                    s.compressed_size as f64 / 1_048_576.0,
-                    ratio
-                );
+                println!("✅ {} : {:.2} Mo -> {:.2} Mo (-{:.1}%)", file_name, s.original_size as f64 / 1_048_576.0, s.compressed_size as f64 / 1_048_576.0, ratio);
+                files_optimized += 1;
             } else {
-                // Cas rare où le fichier a légèrement grossi
-                println!(
-                    "⚠️  {} : {:.2} Mo -> {:.2} Mo (+{:.1}%)",
-                    file_name,
-                    s.original_size as f64 / 1_048_576.0,
-                    s.compressed_size as f64 / 1_048_576.0,
-                    ratio.abs()
-                );
+                println!("⚠️  {} : {:.2} Mo -> {:.2} Mo (+{:.1}%)", file_name, s.original_size as f64 / 1_048_576.0, s.compressed_size as f64 / 1_048_576.0, ratio.abs());
+                files_not_optimized += 1;
             }
         }
     }
 
-    // Calcul du gain global
-    let gain_bytes = if total_original > total_compressed {
-        total_original - total_compressed
-    } else {
-        0
-    };
+    let gain_bytes = if total_original > total_compressed { total_original - total_compressed } else { 0 };
+    let gain_percent = if total_original > 0 { (gain_bytes as f64 / total_original as f64) * 100.0 } else { 0.0 };
 
-    let gain_percent = if total_original > 0 {
-        (gain_bytes as f64 / total_original as f64) * 100.0
-    } else {
-        0.0
-    };
-
-    let line = "-".repeat(53);
-    let double_line = "=".repeat(53);
-
-    println!("\n{}", double_line);
-    println!("📊 RÉSUMÉ GLOBAL");
-    println!("{}", line);
-    println!(" Fichiers traités   : {}", stats.len());
-    if file_errors > 0 {
-        println!(" Échecs             : {} ❌", file_errors);
-    }
-    println!(" Images optimisées  : {}", total_processed);
-    println!(" Images ignorées    : {}", total_skipped);
-    println!("{}", line);
-    println!(" Taille originale   : {:.2} Mo", total_original as f64 / 1_048_576.0);
-    println!(" Taille finale      : {:.2} Mo", total_compressed as f64 / 1_048_576.0);
-    println!(
-        " Gain total         : {:.2} Mo ({:.1}%) 📉",
+    let summary = format!(
+        "\n📊 RÉSUMÉ GLOBAL\n\
+         -----------------------------------------------------\n\
+         Fichiers total      : {}\n\
+         Optimisés           : {} ✅\n\
+         Non optimisés       : {} ⏭️\n\
+         Échecs              : {} ❌\n\
+         -----------------------------------------------------\n\
+         Images optimisées   : {}\n\
+         Images ignorées     : {}\n\
+         -----------------------------------------------------\n\
+         Taille originale    : {:.2} Mo\n\
+         Taille finale       : {:.2} Mo\n\
+         Gain total          : {:.2} Mo ({:.1}%) 📉",
+        stats.len(),
+        files_optimized,
+        files_not_optimized,
+        file_errors,
+        total_processed,
+        total_skipped,
+        total_original as f64 / 1_048_576.0,
+        total_compressed as f64 / 1_048_576.0,
         gain_bytes as f64 / 1_048_576.0,
         gain_percent
     );
-    println!("{}\n", double_line);
+
+    println!("{}", summary);
+    log::info!("{}", summary);
 }
