@@ -1,10 +1,30 @@
+//! Traitement et optimisation des images pour les archives de bandes dessinées.
+//!
+//! Ce module fournit les outils nécessaires pour transformer les images extraites :
+//! - Décodage multi-format.
+//! - Redimensionnement avec filtrage de haute qualité (Lanczos3).
+//! - Encodage performant vers le format WebP.
+//! - Gestion avancée des fichiers JPEG 2000 (JP2) incluant la conversion des profils ICC.
+//!
+//! L'objectif est de réduire l'espace disque tout en préservant une excellente
+//! qualité visuelle pour la lecture de comics.
+
 use anyhow::{Context, Result};
 use image::ImageReader;
 use std::fs;
 use std::path::Path;
 use crate::models::Args;
 
-/// Encode une image au format WebP avec la qualité spécifiée
+/// Encode une image en mémoire au format WebP avec la qualité spécifiée.
+///
+/// Transforme une image dynamique en tampon d'octets encodés en WebP.
+///
+/// # Paramètres
+/// - `img`: La référence vers l'image `DynamicImage` à encoder.
+/// - `quality`: Facteur de qualité entre 1 et 100.
+///
+/// # Retour
+/// Retourne un `Result` contenant le vecteur d'octets (`Vec<u8>`) de l'image compressée.
 pub fn encode_webp(img: &image::DynamicImage, quality: u8) -> Result<Vec<u8>> {
     let rgb_img = img.to_rgb8();
     let (width, height) = rgb_img.dimensions();
@@ -15,13 +35,24 @@ pub fn encode_webp(img: &image::DynamicImage, quality: u8) -> Result<Vec<u8>> {
     Ok(encoded.to_vec())
 }
 
-/// Traite une image unique : décodage, redimensionnement et sauvegarde en WebP
+/// Traite une image individuelle sur le disque : décodage, redimensionnement et conversion.
+///
+/// Cette fonction est le point d'entrée pour l'optimisation de chaque page. Elle remplace
+/// l'image originale par sa version WebP optimisée.
+///
+/// # Paramètres
+/// - `image_path`: Chemin d'accès au fichier image original.
+/// - `args`: Paramètres globaux de l'application (qualité, hauteur cible).
+///
+/// # Erreurs
+/// Retourne une erreur si l'image est corrompue, si le redimensionnement échoue
+/// ou si les permissions d'écriture sont insuffisantes.
 pub fn process_single_image(image_path: &Path, args: &Args) -> Result<()> {
     if args.skip_compression {
         return Ok(());
     }
 
-    // Gestion spécifique du format JPEG 2000 (souvent trouvé dans les PDF)
+    // Gestion spécifique du format JPEG 2000 (fréquent dans les PDF de qualité)
     if image_path.extension().and_then(|e| e.to_str()).map(|e| e.to_lowercase() == "jp2").unwrap_or(false) {
         return process_jp2_image(image_path, args);
     }
@@ -37,7 +68,7 @@ pub fn process_single_image(image_path: &Path, args: &Args) -> Result<()> {
     let new_height = args.target_height;
     let new_width = (new_height as f32 * aspect_ratio) as u32;
 
-    // Redimensionnement haute qualité (Lanczos3)
+    // Redimensionnement haute qualité utilisant l'algorithme Lanczos3
     let resized = img.resize(new_width, new_height, image::imageops::FilterType::Lanczos3);
 
     let webp_path = image_path.with_extension("webp");
@@ -49,7 +80,14 @@ pub fn process_single_image(image_path: &Path, args: &Args) -> Result<()> {
     Ok(())
 }
 
-/// Traitement spécifique pour les images JP2 avec conversion d'espace colorimétrique ICC
+/// Gère le traitement spécifique des images JPEG 2000 (JP2).
+///
+/// Inclut la gestion de la conversion d'espace colorimétrique ICC si un profil
+/// est associé à l'image extraite.
+///
+/// # Paramètres
+/// - `image_path`: Chemin vers le fichier .jp2.
+/// - `args`: Configuration de traitement.
 fn process_jp2_image(image_path: &Path, args: &Args) -> Result<()> {
     let jp2_img = jpeg2k::Image::from_file(image_path)
         .map_err(|e| anyhow::anyhow!("Erreur JP2: {:?}", e))?;
@@ -75,7 +113,7 @@ fn process_jp2_image(image_path: &Path, args: &Args) -> Result<()> {
         _ => return Ok(()),
     };
 
-    // Gestion du profil ICC si présent
+    // Gestion du profil ICC si présent (souvent nécessaire pour les PDF)
     let icc_path = image_path.with_extension("icc");
     let final_rgb = if icc_path.exists() {
         let icc_data = fs::read(&icc_path)?;
@@ -108,6 +146,15 @@ fn process_jp2_image(image_path: &Path, args: &Args) -> Result<()> {
     finalize_image_save(&img, image_path, args.quality)
 }
 
+/// Finalise l'enregistrement de l'image après transformation.
+///
+/// Enregistre l'image au format WebP et supprime le fichier original pour libérer
+/// de l'espace dans le répertoire temporaire.
+///
+/// # Paramètres
+/// - `img`: L'image traitée prête à être sauvegardée.
+/// - `original_path`: Chemin de l'image source à remplacer.
+/// - `quality`: Qualité de compression WebP.
 fn finalize_image_save(img: &image::DynamicImage, original_path: &Path, quality: u8) -> Result<()> {
     let webp_bytes = encode_webp(img, quality)?;
     let webp_path = original_path.with_extension("webp");
