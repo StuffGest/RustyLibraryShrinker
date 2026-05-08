@@ -53,7 +53,7 @@ pub fn process_comic_file(comic: &ComicFile, args: &Args, progress: &ProgressBar
     }
 
     // 3. Traitement parallèle (compression/redimensionnement)
-    let (proc, skip) = process_images_parallel(&images, args, progress)?;
+    let (proc, skip, skip_details) = process_images_parallel(&images, args, progress)?;
 
     // 4. Reconstruction de l'archive optimisée
     progress.set_position(85);
@@ -74,8 +74,9 @@ pub fn process_comic_file(comic: &ComicFile, args: &Args, progress: &ProgressBar
         return Ok(ProcessingStats {
             original_size,
             compressed_size: original_size,
-            images_processed: proc,
-            images_skipped: skip,
+            images_processed: proc, // Type usize
+            images_skipped: skip,   // Type usize
+            skipped_details: skip_details,
             compression_skipped: true,
             output_path: None,
             error_message: None,
@@ -89,8 +90,9 @@ pub fn process_comic_file(comic: &ComicFile, args: &Args, progress: &ProgressBar
     Ok(ProcessingStats {
         original_size,
         compressed_size: new_size,
-        images_processed: proc,
-        images_skipped: skip,
+        images_processed: proc, // Type usize
+        images_skipped: skip,   // Type usize
+        skipped_details: skip_details,
         compression_skipped: false,
         output_path: Some(final_path),
         error_message: None,
@@ -126,21 +128,30 @@ fn find_images(dir: &Path) -> Result<Vec<PathBuf>> {
 /// - `files`: Liste des chemins vers les fichiers images à traiter.
 /// - `args`: Paramètres de compression.
 /// - `progress`: Barre de progression pour le suivi.
-fn process_images_parallel(files: &[PathBuf], args: &Args, progress: &ProgressBar) -> Result<(usize, usize)> {
+fn process_images_parallel(files: &[PathBuf], args: &Args, progress: &ProgressBar) -> Result<(usize, usize, Vec<(String, String)>)> {
     let total = files.len();
-    let (s, r): (Sender<bool>, Receiver<bool>) = bounded(total);
+    // Le canal transmet désormais Result<(), (String, String)> pour capturer l'erreur
+    let (s, r): (Sender<Result<(), (String, String)>>, Receiver<Result<(), (String, String)>>) = bounded(total);
+
     let proc = Arc::new(Mutex::new(0));
     let skip = Arc::new(Mutex::new(0));
+    let skip_details = Arc::new(Mutex::new(Vec::new()));
 
     let p_clone = progress.clone();
     let proc_c = Arc::clone(&proc);
     let skip_c = Arc::clone(&skip);
+    let details_c = Arc::clone(&skip_details);
 
-    // Thread de gestion de la barre de progression
+    // Thread de gestion de la barre de progression et collecte des erreurs
     thread::spawn(move || {
-        for success in r {
-            if success { *proc_c.lock().unwrap() += 1; }
-            else { *skip_c.lock().unwrap() += 1; }
+        for res in r {
+            match res {
+                Ok(_) => { *proc_c.lock().unwrap() += 1; }
+                Err(detail) => {
+                    *skip_c.lock().unwrap() += 1;
+                    details_c.lock().unwrap().push(detail);
+                }
+            }
             let curr = *proc_c.lock().unwrap() + *skip_c.lock().unwrap();
             p_clone.set_position(30 + ((curr * 50) / total) as u64);
         }
@@ -148,8 +159,13 @@ fn process_images_parallel(files: &[PathBuf], args: &Args, progress: &ProgressBa
 
     // Traitement parallèle des images
     files.par_iter().for_each(|path| {
+        let file_name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
         let res = image_utils::process_single_image(path, args);
-        let _ = s.send(res.is_ok());
+
+        match res {
+            Ok(_) => { let _ = s.send(Ok(())); }
+            Err(e) => { let _ = s.send(Err((file_name, e.to_string()))); }
+        }
     });
 
     drop(s);
@@ -159,11 +175,11 @@ fn process_images_parallel(files: &[PathBuf], args: &Args, progress: &ProgressBa
         thread::yield_now();
     }
 
-    // Extraction des compteurs finaux avant libération des verrous
     let final_proc = *proc.lock().unwrap();
     let final_skip = *skip.lock().unwrap();
+    let final_details = skip_details.lock().unwrap().clone();
 
-    Ok((final_proc, final_skip))
+    Ok((final_proc, final_skip, final_details))
 }
 
 /// Gère les opérations de renommage final et de sauvegarde de l'original.
