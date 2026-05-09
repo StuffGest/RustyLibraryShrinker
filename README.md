@@ -26,16 +26,21 @@
 
 ## 🚀 Installation
 
-### Télécharger les binaires pré-compilés pour Linux (Recommandé)
+### Télécharger les binaires pré-compilés pour Linux (Recommandé) et Windows
 
-Téléchargez la dernière version pour Linux depuis la page [GitHub Releases](https://github.com/StuffGest/RustyLibraryShrinker/releases).
+Téléchargez la dernière version pour Linux et Windows depuis la page [GitHub Releases](https://github.com/StuffGest/RustyLibraryShrinker/releases).
 
 #### Installation sur Linux :
 ```bash
-# Télécharger et extraire (remplacez l'URL par la dernière version)
+# Télécharger et extraire
 tar -xzf RustyLibraryShrinker-x86_64-unknown-linux-gnu.tar.gz
 chmod +x RustyLibraryShrinker
 sudo mv RustyLibraryShrinker /usr/local/bin/  # Optionnel : ajouter au PATH
+```
+
+#### Installation sur Windows :
+```bash
+# Télécharger et extraire le .exe
 ```
 
 ### Depuis les sources
