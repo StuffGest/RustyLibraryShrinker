@@ -109,8 +109,8 @@ fn process_pdf_page_layers(
                 apply_alpha(&mut base, &layer_rgb, &a);
                 composite = Some(base);
             },
-            (Some(ref mut b), None) => *b = layer_rgb,
-            (Some(ref mut b), Some(a)) => apply_alpha(b, &layer_rgb, &a),
+            (Some(b), None) => *b = layer_rgb,
+            (Some(b), Some(a)) => apply_alpha(b, &layer_rgb, &a),
         }
     }
 
