@@ -33,9 +33,11 @@ glob = "0.3.3"
 epub = "2.1.5"
 log = "0.4"
 simplelog = "0.12"
+time = { version = "0.3", features = ["local-offset", "macros", "formatting"] }
 
 [profile.release]
-lto = true
-codegen-units = 1
-panic = "abort"
-strip = true
+opt-level = "z"      # Optimise pour la taille (z) au lieu de la vitesse (3)
+lto = true           # Active le Link Time Optimization (très efficace)
+codegen-units = 1    # Réduit le parallélisme de compil pour mieux optimiser
+panic = "abort"      # Retire la logique de "unwind" (gain de place)
+strip = true         # ÉQUIVALENT À LA COMMANDE STRIP (retire les symboles)
