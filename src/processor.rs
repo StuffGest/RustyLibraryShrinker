@@ -198,12 +198,12 @@ fn finalize_output_paths(comic: &ComicFile, temp_out: &Path, args: &Args) -> Res
 
     match args.file_mode {
         FileMode::Suffix => {
-            let dest = parent.join(format!("{} (Optimized).cbz", stem));
+            let dest = parent.join(format!("{}.optimise.cbz", stem));
             fs::rename(temp_out, &dest)?;
             Ok(dest)
         },
         FileMode::Rename => {
-            let backup_name = format!("{} (Original).{}", stem, original_ext);
+            let backup_name = format!("{}.original.{}", stem, original_ext);
             let backup_path = parent.join(backup_name);
             fs::rename(&comic.path, &backup_path)?;
 
