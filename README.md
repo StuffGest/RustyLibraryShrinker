@@ -105,7 +105,7 @@ RustyLibraryShrinker bd/ --quality 75 --target-height 1600
 ### Renommer les fichiers originaux (flux de travail pratique)
 ```bash
 RustyLibraryShrinker bd/ --file-mode rename --quality 85
-# Résultat : Les originaux deviennent * (Original).ext, les fichiers compressés gardent le nom propre.
+# Résultat : Les originaux deviennent *.original.ext, les fichiers compressés gardent le nom propre.
 ```
 
 ### Ignorer les fichiers déjà bien compressés
@@ -166,11 +166,11 @@ RustyLibraryShrinker --glob-pattern "**/Killer*.cbr" --verbose
 L'option `--file-mode` (ou `-m`) permet de choisir entre trois stratégies :
 
 1. **`suffix` (Défaut)** : L'original reste inchangé, un nouveau fichier est créé.
-  - `MaBD.cbz` → `MaBD (Optimized).cbz`
+  - `MaBD.cbz` → `MaBD.optimise.cbz`
 2. **`rename` (Backup)** : L'original est conservé sous un nouveau nom et le fichier compressé prend la place du nom d'origine.
-  - `MaBD.cbz` → `MaBD (Original).cbz` (sauvegarde) + `MaBD.cbz` (compressé)
-  - `MaBD.cbr` → `MaBD (Original).cbr` (sauvegarde) + `MaBD.cbz` (compressé)
-  - `MaBD.pdf` → `MaBD (Original).pdf` (sauvegarde) + `MaBD.cbz` (compressé)
+  - `MaBD.cbz` → `MaBD.original.cbz` (sauvegarde) + `MaBD.cbz` (compressé)
+  - `MaBD.cbr` → `MaBD.original.cbr` (sauvegarde) + `MaBD.cbz` (compressé)
+  - `MaBD.pdf` → `MaBD.original.pdf` (sauvegarde) + `MaBD.cbz` (compressé)
 3. **`replace` (Remplacement)** : L'original est supprimé et remplacé par le fichier compressé (pas de sauvegarde).
   - `MaBD.cbr` → (Supprimé) + `MaBD.cbz` (compressé)
 
@@ -285,5 +285,6 @@ Taille originale : 119.4 Mo → Taille finale : 28.3 Mo
 
 ```bash
 cargo build --release
-strip target/release/RustyLibraryShrinker
+strip target/release/RustyLibraryShrinker #Linux only
+cargo doc --no-deps #generate doc
 ```

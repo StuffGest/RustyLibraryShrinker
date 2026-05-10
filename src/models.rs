@@ -11,9 +11,9 @@ use std::path::PathBuf;
 /// Modes de gestion des fichiers de sortie après traitement.
 #[derive(Debug, Clone, Copy, ValueEnum, PartialEq)]
 pub enum FileMode {
-    /// Crée un nouveau fichier avec un suffixe "(Optimized)" (Défaut).
+    /// Crée un nouveau fichier avec un suffixe ".optimise.cbz" (Défaut).
     Suffix,
-    /// Renomme l'original en "(Original)" et donne le nom d'origine au compressé.
+    /// Renomme l'original en ".original.cbz" et donne le nom d'origine au compressé.
     Rename,
     /// Remplace directement l'original (pas de sauvegarde/backup).
     Replace,
