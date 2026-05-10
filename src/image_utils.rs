@@ -64,8 +64,18 @@ pub fn process_single_image(image_path: &Path, args: &Args) -> Result<()> {
         return Ok(());
     }
 
+    let ext = image_path.extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_lowercase())
+        .unwrap_or_default();
+
+    // Interception des WebP pour éviter de ré-encoder un format déjà optimisé
+    if ext == "webp" {
+        return Err(anyhow::anyhow!("Les fichiers WebP ne sont pas réoptimisés"));
+    }
+
     // Gestion spécifique du format JPEG 2000 (fréquent dans les PDF de qualité)
-    if image_path.extension().and_then(|e| e.to_str()).map(|e| e.to_lowercase() == "jp2").unwrap_or(false) {
+    if ext == "jp2" {
         return process_jp2_image(image_path, args);
     }
 
