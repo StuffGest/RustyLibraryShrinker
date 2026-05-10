@@ -26,29 +26,36 @@ use std::fs;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+use time::UtcOffset;
 use walkdir::WalkDir;
 
 use crate::models::{Args, ComicFile, ComicType, ProcessingStats};
 
 /// Fonction principale initialisant l'environnement et lançant le traitement.
 fn main() -> Result<()> {
+    let local_offset = UtcOffset::current_local_offset().unwrap_or(UtcOffset::UTC);
     let args = Args::parse();
     let input_path = args.input.clone().unwrap_or_else(|| PathBuf::from("."));
 
     // --- Initialisation des Logs ---
+    let config = ConfigBuilder::new()
+        .set_time_offset(local_offset)
+        .set_time_format_custom(format_description!("[hour]:[minute]:[second]"))
+        .build();
+
     let mut loggers: Vec<Box<dyn SharedLogger>> = Vec::new();
     if let Some(log_path) = &args.log_file {
         if let Ok(file) = File::create(log_path) {
             loggers.push(WriteLogger::new(
                 LevelFilter::Info,
-                Config::default(),
+                config,
                 file,
             ));
         }
     }
     // On ne met pas de TermLogger ici pour ne pas polluer l'affichage d'indicatif
     if !loggers.is_empty() {
-        CombinedLogger::init(loggers).unwrap();
+        CombinedLogger::init(loggers)?;
     }
 
     log::info!("🚀 Démarrage de RustyLibraryShrinker");
@@ -99,7 +106,7 @@ fn main() -> Result<()> {
     // Barre globale (toujours visible en haut de la console)
     let main_bar = multi.add(ProgressBar::new(files.len() as u64));
     main_bar.set_style(ProgressStyle::default_bar()
-        .template("{spinner:.green} global [{bar:40.cyan/blue}] {pos}/{len} fichiers | {elapsed}")?);
+        .template("{spinner:.green} global [{bar:40.cyan/blue}] {pos}/{len} fichiers ({percent}%) [Temps écoulé: {elapsed}, Restant: {eta}]")?);
 
     let stats_map = Arc::new(Mutex::new(HashMap::new()));
 
@@ -121,12 +128,13 @@ fn main() -> Result<()> {
                 // Log des images ignorées s'il y en a (placé ici car 's' est disponible)
                 if !s.skipped_details.is_empty() {
                     for (img_name, reason) in &s.skipped_details {
-                        log::warn!(
-                            "  [IMAGE SKIPPED] Archive: {} | Image: {} | Raison: {}",
-                            file_name,
-                            img_name,
-                            reason
-                        );
+                        let msg = format!("[IMAGE SKIPPED] Archive: {} | Image: {} | Raison: {}", file_name, img_name, reason);
+
+                        if reason.contains("WebP") {
+                            log::info!("{}", msg);
+                        } else {
+                            log::warn!("{}", msg);
+                        }
                     }
                 }
 
