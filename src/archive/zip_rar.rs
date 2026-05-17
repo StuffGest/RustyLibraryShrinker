@@ -112,9 +112,13 @@ pub fn create_cbz(source_dir: &Path, output_path: &Path) -> Result<()> {
     for entry in entries {
         let path = entry.path();
         let name = path.file_name().unwrap().to_string_lossy();
+        let name_lower = name.to_lowercase();
 
         // On n'ajoute que les fichiers convertis en .webp
-        if name.ends_with(".webp") {
+        if name_lower.ends_with(".webp")
+            || name_lower == "comicinfo.xml"
+            || matches!(path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase().as_str(), "jpg" | "jpeg" | "png" | "bmp" | "jp2")
+        {
             zip.start_file(name, options)?;
             let mut f = File::open(path)?;
             std::io::copy(&mut f, &mut zip)?;
