@@ -41,19 +41,19 @@ pub fn process_comic_file(comic: &ComicFile, args: &Args, progress: &ProgressBar
     progress.set_position(10);
     archive::extract_comic(comic, temp_dir.path(), progress)?;
 
-    // 2. Recherche et tri des images
+    // 2. Recherche et tri des fichiers extraits
     progress.set_position(30);
-    let mut images = find_images(temp_dir.path())?;
+    let mut files = find_all_files(temp_dir.path())?;
 
     // Le tri alphabétique est essentiel pour garantir l'ordre de lecture
-    images.sort_by(|a, b| a.file_name().cmp(&b.file_name()));
+    files.sort_by(|a, b| a.file_name().cmp(&b.file_name()));
 
-    if images.is_empty() {
-        return Err(anyhow::anyhow!("Aucune image trouvée après extraction"));
+    if files.is_empty() {
+        return Err(anyhow::anyhow!("Aucun fichier trouvé après extraction"));
     }
 
-    // 3. Traitement parallèle (compression/redimensionnement)
-    let (proc, skip, skip_details) = process_images_parallel(&images, args, progress)?;
+    // 3. Traitement parallèle (compression/redimensionnement des images uniquement)
+    let (proc, skip, skip_details) = process_images_parallel(&files, args, progress)?;
 
     // 4. Reconstruction de l'archive optimisée
     progress.set_position(85);
@@ -100,20 +100,17 @@ pub fn process_comic_file(comic: &ComicFile, args: &Args, progress: &ProgressBar
     })
 }
 
-/// Recherche récursivement les fichiers images dans un répertoire.
+/// Recherche récursivement tous les fichiers dans un répertoire.
 ///
-/// Filtre les fichiers par extension (jpg, png, webp, etc.).
+/// Collecte l'ensemble des éléments afin de préserver la structure et les métadonnées.
 ///
 /// # Paramètres
 /// - `dir`: Chemin du répertoire à scanner.
-fn find_images(dir: &Path) -> Result<Vec<PathBuf>> {
+fn find_all_files(dir: &Path) -> Result<Vec<PathBuf>> {
     let mut list = Vec::new();
     for entry in walkdir::WalkDir::new(dir).into_iter().filter_map(|e| e.ok()) {
         if entry.file_type().is_file() {
-            let ext = entry.path().extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
-            if matches!(ext.as_str(), "jpg" | "jpeg" | "png" | "bmp" | "webp" | "jp2") {
-                list.push(entry.path().to_path_buf());
-            }
+            list.push(entry.path().to_path_buf());
         }
     }
     Ok(list)
@@ -122,7 +119,8 @@ fn find_images(dir: &Path) -> Result<Vec<PathBuf>> {
 /// Gère le traitement des images en parallèle à l'aide d'un pool de threads.
 ///
 /// Utilise Rayon pour la distribution des tâches et un canal de communication
-/// pour mettre à jour la progression via un thread dédié.
+/// pour mettre à jour la progression via un thread dédié. Les fichiers qui ne sont
+/// pas des images (comme ComicInfo.xml) sont ignorés volontairement sans erreur.
 ///
 /// # Paramètres
 /// - `files`: Liste des chemins vers les fichiers images à traiter.
@@ -157,9 +155,17 @@ fn process_images_parallel(files: &[PathBuf], args: &Args, progress: &ProgressBa
         }
     });
 
-    // Traitement parallèle des images
+    // Traitement parallèle des fichiers
     files.par_iter().for_each(|path| {
         let file_name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+
+        // Si ce n'est pas une extension d'image supportée, on n'y touche pas, on le garde intact (ex: ComicInfo.xml)
+        if !matches!(ext.as_str(), "jpg" | "jpeg" | "png" | "bmp" | "webp" | "jp2") {
+            let _ = s.send(Ok(()));
+            return;
+        }
+
         let res = image_utils::process_single_image(path, args);
 
         match res {
