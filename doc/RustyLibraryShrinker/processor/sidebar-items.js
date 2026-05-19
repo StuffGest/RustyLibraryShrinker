@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["finalize_output_paths","find_images","process_comic_file","process_images_parallel"]};
+window.SIDEBAR_ITEMS = {"fn":["finalize_output_paths","find_all_files","process_comic_file","process_images_parallel"]};

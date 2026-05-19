@@ -112,15 +112,19 @@
 <a href=#112 id=112 data-nosnippet>112</a>    <span class="kw">for </span>entry <span class="kw">in </span>entries {
 <a href=#113 id=113 data-nosnippet>113</a>        <span class="kw">let </span>path = entry.path();
 <a href=#114 id=114 data-nosnippet>114</a>        <span class="kw">let </span>name = path.file_name().unwrap().to_string_lossy();
-<a href=#115 id=115 data-nosnippet>115</a>
-<a href=#116 id=116 data-nosnippet>116</a>        <span class="comment">// On n'ajoute que les fichiers convertis en .webp
-<a href=#117 id=117 data-nosnippet>117</a>        </span><span class="kw">if </span>name.ends_with(<span class="string">".webp"</span>) {
-<a href=#118 id=118 data-nosnippet>118</a>            zip.start_file(name, options)<span class="question-mark">?</span>;
-<a href=#119 id=119 data-nosnippet>119</a>            <span class="kw">let </span><span class="kw-2">mut </span>f = File::open(path)<span class="question-mark">?</span>;
-<a href=#120 id=120 data-nosnippet>120</a>            std::io::copy(<span class="kw-2">&amp;mut </span>f, <span class="kw-2">&amp;mut </span>zip)<span class="question-mark">?</span>;
-<a href=#121 id=121 data-nosnippet>121</a>        }
-<a href=#122 id=122 data-nosnippet>122</a>    }
-<a href=#123 id=123 data-nosnippet>123</a>
-<a href=#124 id=124 data-nosnippet>124</a>    zip.finish()<span class="question-mark">?</span>;
-<a href=#125 id=125 data-nosnippet>125</a>    <span class="prelude-val">Ok</span>(())
-<a href=#126 id=126 data-nosnippet>126</a>}</code></pre></div></section></main></body></html>
+<a href=#115 id=115 data-nosnippet>115</a>        <span class="kw">let </span>name_lower = name.to_lowercase();
+<a href=#116 id=116 data-nosnippet>116</a>
+<a href=#117 id=117 data-nosnippet>117</a>        <span class="comment">// On n'ajoute que les fichiers convertis en .webp
+<a href=#118 id=118 data-nosnippet>118</a>        </span><span class="kw">if </span>name_lower.ends_with(<span class="string">".webp"</span>)
+<a href=#119 id=119 data-nosnippet>119</a>            || name_lower == <span class="string">"comicinfo.xml"
+<a href=#120 id=120 data-nosnippet>120</a>            </span>|| <span class="macro">matches!</span>(path.extension().and_then(|e| e.to_str()).unwrap_or(<span class="string">""</span>).to_lowercase().as_str(), <span class="string">"jpg" </span>| <span class="string">"jpeg" </span>| <span class="string">"png" </span>| <span class="string">"bmp" </span>| <span class="string">"jp2"</span>)
+<a href=#121 id=121 data-nosnippet>121</a>        {
+<a href=#122 id=122 data-nosnippet>122</a>            zip.start_file(name, options)<span class="question-mark">?</span>;
+<a href=#123 id=123 data-nosnippet>123</a>            <span class="kw">let </span><span class="kw-2">mut </span>f = File::open(path)<span class="question-mark">?</span>;
+<a href=#124 id=124 data-nosnippet>124</a>            std::io::copy(<span class="kw-2">&amp;mut </span>f, <span class="kw-2">&amp;mut </span>zip)<span class="question-mark">?</span>;
+<a href=#125 id=125 data-nosnippet>125</a>        }
+<a href=#126 id=126 data-nosnippet>126</a>    }
+<a href=#127 id=127 data-nosnippet>127</a>
+<a href=#128 id=128 data-nosnippet>128</a>    zip.finish()<span class="question-mark">?</span>;
+<a href=#129 id=129 data-nosnippet>129</a>    <span class="prelude-val">Ok</span>(())
+<a href=#130 id=130 data-nosnippet>130</a>}</code></pre></div></section></main></body></html>
