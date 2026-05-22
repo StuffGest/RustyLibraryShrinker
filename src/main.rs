@@ -30,7 +30,7 @@ use time::UtcOffset;
 use walkdir::WalkDir;
 use fluent_templates::fluent_bundle::FluentValue;
 
-use crate::models::{tr, detect_system_lang, Args, ComicFile, ComicType, ProcessingStats};
+use crate::models::{tr, detect_system_lang, Args, ComicFile, ComicType, ProcessingStats, SUPPORTED_LANGS, DEFAULT_LANG};
 
 /// Fonction principale initialisant l'environnement et lançant le traitement.
 fn main() -> Result<()> {
@@ -39,13 +39,21 @@ fn main() -> Result<()> {
     // On analyse les arguments bruts
     let mut args = Args::parse();
 
-    // Si l'utilisateur n'a pas passé explicitement une langue via `--lang`,
-    // on utilise la langue détectée de son terminal (ex: respecte $env:LANG).
-    if args.lang == "fr" && detect_system_lang().starts_with("en") {
-        args.lang = "en".to_string();
-    }
+    // 1. Si --lang est fourni et supporté, on l'utilise.
+    // 2. Sinon, on détecte le système.
+    // 3. Si le système n'est pas dans la liste supportée, on tombe sur EN.
+    if args.lang.is_empty() || !SUPPORTED_LANGS.contains(&args.lang.as_str()) {
+        let sys = detect_system_lang(); // ex: "fr_FR"
+        let short_code = &sys[..2];     // ex: "fr"
 
+        if SUPPORTED_LANGS.contains(&short_code) {
+            args.lang = short_code.to_string();
+        } else {
+            args.lang = DEFAULT_LANG.to_string();
+        }
+    }
     let lang = &args.lang;
+
     let input_path = args.input.clone().unwrap_or_else(|| PathBuf::from("."));
 
     // --- Initialisation des Logs ---
