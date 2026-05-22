@@ -69,8 +69,8 @@ pub fn process_single_image(image_path: &Path, args: &Args) -> Result<()> {
         .map(|e| e.to_lowercase())
         .unwrap_or_default();
 
-    // Interception des WebP pour éviter de ré-encoder un format déjà optimisé
-    if ext == "webp" {
+    // Interception des WebP pour éviter de ré-encoder un format déjà optimisé, sauf si forcé
+    if ext == "webp" && !args.force_shrink {
         return Err(anyhow::anyhow!("Les fichiers WebP ne sont pas réoptimisés"));
     }
 
@@ -107,7 +107,11 @@ pub fn process_single_image(image_path: &Path, args: &Args) -> Result<()> {
     let webp_bytes = encode_webp(&resized, args.quality)?;
 
     fs::write(&webp_path, webp_bytes).context("Échec de l'écriture du fichier WebP")?;
-    fs::remove_file(image_path).context("Impossible de supprimer l'image originale")?;
+
+    // Si l'image source était déjà un .webp (mode force), on évite de tenter de supprimer un fichier sous le même nom
+    if ext != "webp" {
+        fs::remove_file(image_path).context("Impossible de supprimer l'image originale")?;
+    }
 
     Ok(())
 }
@@ -191,6 +195,8 @@ fn finalize_image_save(img: &image::DynamicImage, original_path: &Path, quality:
     let webp_bytes = encode_webp(img, quality)?;
     let webp_path = original_path.with_extension("webp");
     fs::write(&webp_path, webp_bytes).context("Erreur écriture finale")?;
-    fs::remove_file(original_path).context("Erreur suppression temporaire")?;
+    if original_path != webp_path {
+        fs::remove_file(original_path).context("Erreur suppression temporaire")?;
+    }
     Ok(())
 }
