@@ -28,13 +28,24 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use time::UtcOffset;
 use walkdir::WalkDir;
+use fluent_templates::fluent_bundle::FluentValue;
 
-use crate::models::{Args, ComicFile, ComicType, ProcessingStats};
+use crate::models::{tr, detect_system_lang, Args, ComicFile, ComicType, ProcessingStats};
 
 /// Fonction principale initialisant l'environnement et lançant le traitement.
 fn main() -> Result<()> {
     let local_offset = UtcOffset::current_local_offset().unwrap_or(UtcOffset::UTC);
-    let args = Args::parse();
+
+    // On analyse les arguments bruts
+    let mut args = Args::parse();
+
+    // Si l'utilisateur n'a pas passé explicitement une langue via `--lang`,
+    // on utilise la langue détectée de son terminal (ex: respecte $env:LANG).
+    if args.lang == "fr" && detect_system_lang().starts_with("en") {
+        args.lang = "en".to_string();
+    }
+
+    let lang = &args.lang;
     let input_path = args.input.clone().unwrap_or_else(|| PathBuf::from("."));
 
     // --- Initialisation des Logs ---
@@ -58,7 +69,7 @@ fn main() -> Result<()> {
         CombinedLogger::init(loggers)?;
     }
 
-    log::info!("🚀 Démarrage de RustyLibraryShrinker");
+    log::info!("{}", tr("msg-log-start", lang, None));
 
     // Configuration du nombre de threads
     if args.threads > 0 {
@@ -92,12 +103,14 @@ fn main() -> Result<()> {
     };
 
     if files.is_empty() {
-        println!("❌ Aucun fichier trouvé.");
+        println!("❌ {}", tr("msg-no-files-found", lang, None));
         log::warn!("Aucun fichier trouvé pour le chemin : {:?}", input_path);
         return Ok(());
     }
 
-    println!("🚀 RustyLibraryShrinker : {} fichier(s) à traiter", files.len());
+    let mut start_args = HashMap::new();
+    start_args.insert("count".to_string(), FluentValue::from(files.len()));
+    println!("🚀 {}", tr("msg-start-processing", lang, Some(&start_args)));
     println!("-----------------------------------------------------");
 
     // 2. UI - Configuration du MultiProgress pour l'affichage des barres
@@ -105,8 +118,14 @@ fn main() -> Result<()> {
 
     // Barre globale (toujours visible en haut de la console)
     let main_bar = multi.add(ProgressBar::new(files.len() as u64));
-    main_bar.set_style(ProgressStyle::default_bar()
-        .template("{spinner:.green} global [{bar:40.cyan/blue}] {pos}/{len} fichiers ({percent}%) [Temps écoulé: {elapsed}, Restant: {eta}]")?);
+
+    let global_template = format!(
+        "{{spinner:.green}} global [{{bar:40.cyan/blue}}] {{pos}}/{{len}} {} ({{percent}}%) [{}: {{elapsed}}, {}: {{eta}}]",
+        tr("cli-label-files", lang, None),
+        tr("cli-label-elapsed", lang, None),
+        tr("cli-label-remaining", lang, None)
+    );
+    main_bar.set_style(ProgressStyle::default_bar().template(&global_template)?);
 
     let stats_map = Arc::new(Mutex::new(HashMap::new()));
 
@@ -128,8 +147,14 @@ fn main() -> Result<()> {
                 // Log des images ignorées s'il y en a (placé ici car 's' est disponible)
                 if !s.skipped_details.is_empty() {
                     for (img_name, reason) in &s.skipped_details {
-                        let msg = format!("[IMAGE SKIPPED] Archive: {} | Image: {} | Raison: {}", file_name, img_name, reason);
-
+                        let msg = format!(
+                            "[{}] Archive: {} | Image: {} | {}: {}",
+                            tr("msg-image-skipped", lang, None),
+                            file_name,
+                            img_name,
+                            tr("msg-reason", lang, None),
+                            reason
+                        );
                         if reason.contains("WebP") {
                             log::info!("{}", msg);
                         } else {
@@ -140,7 +165,7 @@ fn main() -> Result<()> {
 
                 let diff = s.original_size as f64 - s.compressed_size as f64;
                 if diff.abs() < 1024.0 {
-                    log::info!("SKIP: {} (gain insuffisant)", file_name);
+                    log::info!("SKIP: {} ({})", file_name, tr("msg-log-no-gain", lang, None));
                 } else {
                     log::info!("SUCCESS: {} (-{:.1}%)", file_name, (diff / s.original_size as f64) * 100.0);
                 }
@@ -169,13 +194,11 @@ fn main() -> Result<()> {
         main_bar.inc(1);
     });
 
-    main_bar.finish_with_message("Traitement terminé !");
-
-    // Nettoyage de l'interface MultiProgress avant l'affichage du bilan
+    main_bar.finish_with_message(tr("msg-processing-complete", lang, None));
     let _ = multi.clear();
 
     let final_stats = stats_map.lock().unwrap();
-    print_final_summary(&final_stats);
+    print_final_summary(&final_stats, lang);
 
     Ok(())
 }
@@ -241,8 +264,9 @@ fn detect_type(p: &Path) -> Result<ComicFile> {
 /// le gain total d'espace disque.
 ///
 /// # Paramètres
-/// - `stats`: Une table de hachage associant le chemin des fichiers à leurs statistiques.
-fn print_final_summary(stats: &HashMap<PathBuf, ProcessingStats>) {
+/// - `stats`: Une table de hachage associant le chemin des fichiers à leurs statis
+/// - `lang`: localization
+fn print_final_summary(stats: &HashMap<PathBuf, ProcessingStats>, lang: &str) {
     let mut total_original = 0u64;
     let mut total_compressed = 0u64;
     let mut total_processed = 0;
@@ -251,7 +275,7 @@ fn print_final_summary(stats: &HashMap<PathBuf, ProcessingStats>) {
     let mut files_optimized = 0;
     let mut files_not_optimized = 0;
 
-    println!("\n--- DÉTAIL PAR FICHIER ---");
+    println!("\n--- {} ---", tr("msg-detailed-results", lang, None));
 
     for (path, s) in stats {
         total_original += s.original_size;
@@ -271,7 +295,7 @@ fn print_final_summary(stats: &HashMap<PathBuf, ProcessingStats>) {
             // Gestion de l'icône et du texte de gain
             // Seuil de 1024 octets (1 Ko) pour considérer qu'il y a un gain
             if diff.abs() < 1024.0 {
-                println!("⏭️  {} : {:.2} Mo -> {:.2} Mo (pas de gain)", file_name, s.original_size as f64 / 1_048_576.0, s.compressed_size as f64 / 1_048_576.0);
+                println!("⏭️  {} : {:.2} Mo -> {:.2} Mo ({})", file_name, s.original_size as f64 / 1_048_576.0, s.compressed_size as f64 / 1_048_576.0, tr("msg-skipped-no-gain", lang, None));
                 files_not_optimized += 1;
             } else if diff > 0.0 {
                 println!("✅ {} : {:.2} Mo -> {:.2} Mo (-{:.1}%)", file_name, s.original_size as f64 / 1_048_576.0, s.compressed_size as f64 / 1_048_576.0, ratio);
@@ -287,29 +311,39 @@ fn print_final_summary(stats: &HashMap<PathBuf, ProcessingStats>) {
     let gain_percent = if total_original > 0 { (gain_bytes as f64 / total_original as f64) * 100.0 } else { 0.0 };
 
     let summary = format!(
-        "\n📊 RÉSUMÉ GLOBAL\n\
+        "\n📊 {summary_title}\n\
          -----------------------------------------------------\n\
-         Fichiers total      : {}\n\
-         Optimisés           : {} ✅\n\
-         Non optimisés       : {} ⏭️\n\
-         Échecs              : {} ❌\n\
+         {label_total_files}      : {total_files}\n\
+         {label_optimized}           : {optimized} ✅\n\
+         {label_not_optimized}       : {not_optimized} ⏭️\n\
+         {label_failed}              : {failed} ❌\n\
          -----------------------------------------------------\n\
-         Images optimisées   : {}\n\
-         Images ignorées     : {}\n\
+         {label_img_optimized}   : {img_optimized}\n\
+         {label_img_skipped}     : {img_skipped}\n\
          -----------------------------------------------------\n\
-         Taille originale    : {:.2} Mo\n\
-         Taille finale       : {:.2} Mo\n\
-         Gain total          : {:.2} Mo ({:.1}%) 📉",
-        stats.len(),
-        files_optimized,
-        files_not_optimized,
-        file_errors,
-        total_processed,
-        total_skipped,
-        total_original as f64 / 1_048_576.0,
-        total_compressed as f64 / 1_048_576.0,
-        gain_bytes as f64 / 1_048_576.0,
-        gain_percent
+         {label_orig_size}    : {orig_size} Mo\n\
+         {label_final_size}       : {final_size} Mo\n\
+         {label_total_gain}          : {gain_mo} Mo ({gain_pct}%) 📉",
+        summary_title = tr("msg-global-summary", lang, None),
+        label_total_files = tr("msg-summary-total-files", lang, None),
+        label_optimized = tr("msg-optimized", lang, None),
+        label_not_optimized = tr("msg-not-optimized", lang, None),
+        label_failed = tr("msg-failed", lang, None),
+        label_img_optimized = tr("msg-summary-img-optimized", lang, None),
+        label_img_skipped = tr("msg-summary-img-skipped", lang, None),
+        label_orig_size = tr("msg-original-size", lang, None),
+        label_final_size = tr("msg-final-size", lang, None),
+        label_total_gain = tr("msg-total-gain", lang, None),
+        total_files = stats.len(),
+        optimized = files_optimized,
+        not_optimized = files_not_optimized,
+        failed = file_errors,
+        img_optimized = total_processed,
+        img_skipped = total_skipped,
+        orig_size = format!("{:.2}", total_original as f64 / 1_048_576.0),
+        final_size = format!("{:.2}", total_compressed as f64 / 1_048_576.0),
+        gain_mo = format!("{:.2}", gain_bytes as f64 / 1_048_576.0),
+        gain_pct = format!("{:.1}", gain_percent)
     );
 
     println!("{}", summary);
