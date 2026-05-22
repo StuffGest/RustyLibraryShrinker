@@ -91,6 +91,10 @@ pub struct Args {
     /// Désactive la compression des images : convertit uniquement le conteneur vers le format CBZ.
     #[arg(short = 'S', long)]
     pub skip_compression: bool,
+
+    /// Force le ré-encodage et le redimensionnement des images même si elles sont déjà au format WebP.
+    #[arg(long)]
+    pub force_shrink: bool,
 }
 
 /// Résultat détaillé du traitement d'un fichier.
