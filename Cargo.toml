@@ -1,6 +1,6 @@
 [package]
 name = "RustyLibraryShrinker"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2024"
 authors = ["StuffGest <stuffgest@gmail.com>"]
 description = "High-performance comic book compression tool with WebP conversion supporting CBR, CBZ, PDF, and EPUB formats"
@@ -35,6 +35,8 @@ epub = "2.1.5"
 log = "0.4"
 simplelog = "0.12"
 time = { version = "0.3", features = ["local-offset", "macros", "formatting"] }
+fluent-templates = "0.9.0"
+once_cell = "1.19.0"
 
 [profile.release]
 opt-level = "z"      # Optimise pour la taille (z) au lieu de la vitesse (3)
