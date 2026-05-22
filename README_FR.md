@@ -14,11 +14,12 @@
 - ✅ **Support multi-format** - Gère les fichiers EPUB, CBR (RAR), CBZ (ZIP) et PDF avec détection automatique du format.
 - ✅ **Support PDF Avancé** - Extraction directe des images intégrées (JPEG, PNG, JP2, CMYK) avec gestion des **SMasks (transparence)** et des profils **ICC**.
 - ✅ **Support EPUB** - Extraction intelligente respectant l'ordre interne du manifeste.
+- ✅ **Internationalisation (i18n)** - Interface utilisateur, barres de progression, logs et documentation d'aide de la ligne de commande entièrement localisés en Français et Anglais.
 - ✅ **Traitement automatique de dossiers** - Traite par défaut tous les fichiers de BD dans un répertoire.
 - ✅ **Support des patterns Glob** - Traitement sélectif via des motifs (ex: "**/ABC*.cbr").
-- ✅ **Visualisation de la progression** - Affichage multicouche style Docker (via Indicatif).
+- ✅ **Visualisation de la progression** - Affichage multicouche style Docker (via Indicatif) traduit à la volée selon la langue active.
 - ✅ **Préservation intelligente** - Conserve les fichiers déjà bien compressés si le gain est inférieur au seuil défini (5% par défaut) et préserve l'intégralité des métadonnées comme `ComicInfo.xml`.
-- ✅ **Gestion des logs** - Sortie détaillée en texte brut pour le suivi des erreurs et des succès via `--log-file`.
+- ✅ **Gestion des logs** - Sortie détaillée en texte brut localisée pour le suivi des erreurs et des succès via `--log-file`.
 - ✅ **Force la compression WebP** - Capable de redimensionner et de re-compresser des fichiers même s'ils sont déjà au format WebP grâce à l'option `--force-shrink`.
 - ✅ **Gestion robuste des erreurs** - Continue le traitement même avec des images corrompues ou hors limites WebP (max 16383px).
 - ✅ **Format de sortie CBZ** - Génère systématiquement des fichiers .cbz standardisés, quel que soit le format d'entrée.
@@ -39,7 +40,7 @@ sudo mv RustyLibraryShrinker /usr/local/bin/  # Optionnel : ajouter au PATH
 ```
 
 #### Installation sur Windows :
-```
+```powershell
 # Télécharger et extraire le .exe du RustyLibraryShrinker-x86_64-windows.zip
 ```
 
@@ -53,6 +54,18 @@ cargo build --release
 Le binaire compilé sera disponible dans `target/release/RustyLibraryShrinker`.
 
 ## 🛠 Utilisation
+
+### Gestion de la langue (Interface & CLI Help)
+L'application s'adapte automatiquement à la langue du terminal système actuel (`LANG` ou `LC_ALL`). Néanmoins, vous pouvez forcer la langue manuellement.
+
+**Exécuter l'application en Anglais (même si le système est en Français) :**
+```
+RustyLibraryShrinker --lang en
+```
+
+**Forcer l'anglais au niveau de la session de terminal pour le `--help` et l'affichage global :**
+* *Linux/macOS :* `LANG=en_US.UTF-8 cargo run -- --help`
+* *Windows (PowerShell) :* `$env:LANG="en_US.UTF-8"; cargo run -- --help`
 
 ### Traiter un fichier unique
 ```
@@ -120,11 +133,11 @@ RustyLibraryShrinker bd/ --min-savings 10.0  # Compresse uniquement si le gain e
 
 ## ⚙️ Options
 
+- `--lang` : Langue de l'interface (ex: `fr`, `en`). Par défaut retombe sur `fr`.
 - `--quality` / `-q` : Qualité WebP (1-100, défaut : 90)
   - 85-95 : Haute qualité, compression modérée.
   - 65-80 : Équilibre entre qualité et taille.
   - 40-60 : Petits fichiers, qualité inférieure.
-
 - `--target-height` / `-H` : Hauteur cible des images en pixels (défaut : 1800).
 - `--threads` / `-t` : Nombre de threads maximum (défaut : 0 pour auto).
 - `--log-file` / `-l` : Chemin vers un fichier texte brut pour enregistrer le déroulement.
@@ -169,16 +182,16 @@ RustyLibraryShrinker --glob-pattern "**/Killer*.cbr" --verbose
 
 ### Gestion des fichiers de sortie (`--file-mode`)
 
-L'option `--file-mode` (ou `-m`) permet de choisir entre trois stratégies :
+L'option `--file-mode` (ou `-r`) permet de choisir entre trois stratégies :
 
 1. **`suffix` (Défaut)** : L'original reste inchangé, un nouveau fichier est créé.
-- `MaBD.cbz` → `MaBD.optimise.cbz`
+  - `MaBD.cbz` → `MaBD.optimise.cbz`
 2. **`rename` (Backup)** : L'original est conservé sous un nouveau nom et le fichier compressé prend la place du nom d'origine.
-- `MaBD.cbz` → `MaBD.original.cbz` (sauvegarde) + `MaBD.cbz` (compressé)
-- `MaBD.cbr` → `MaBD.original.cbr` (sauvegarde) + `MaBD.cbz` (compressé)
-- `MaBD.pdf` → `MaBD.original.pdf` (sauvegarde) + `MaBD.cbz` (compressé)
+  - `MaBD.cbz` → `MaBD.original.cbz` (sauvegarde) + `MaBD.cbz` (compressé)
+  - `MaBD.cbr` → `MaBD.original.cbr` (sauvegarde) + `MaBD.cbz` (compressé)
+  - `MaBD.pdf` → `MaBD.original.pdf` (sauvegarde) + `MaBD.cbz` (compressé)
 3. **`replace` (Remplacement)** : L'original est supprimé et remplacé par le fichier compressé (pas de sauvegarde).
-- `MaBD.cbr` → (Supprimé) + `MaBD.cbz` (compressé)
+  - `MaBD.cbr` → (Supprimé) + `MaBD.cbz` (compressé)
 
 **Exemple d'usage :**
 ```
@@ -206,14 +219,15 @@ RustyLibraryShrinker -r rename /chemin/bd/
 
 ## 📊 Affichage de la Progression
 
+L'affichage de la barre globale s'adapte dynamiquement selon la langue choisie (ex: `global [███] 2/3 fichiers` ou `global [███] 2/3 files`).
+
 ```
-🚀 Found 3 comic file(s) to process
-Settings: Quality=90, Target Height=1800px
+🚀 RustyLibraryShrinker : 3 fichier(s) à traiter
 -----------------------------------------------------
-⠋ [████████████████████████████████████████] 2/3 fichiers (00:00:45)
-📖 BD1.cbz [████████████████████████████████] 100%
-📖 BD2.cbz [████████████████░░░░░░░░░░░░░░░░] 65%
-📖 BD3.cbz [████░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 15%
+⠋ global [████████████████████████████████████████] 2/3 fichiers (66%) [Temps écoulé: 00:00:45, Restant: 00:00:22]
+  BD1.cbz [████████████████████████████████] 100%
+  BD2.cbz [████████████████░░░░░░░░░░░░░░░░] 65%
+  BD3.cbz [████░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 15%
 ```
 
 ## 📊 Rapport de Résumé (Log / Terminal)
@@ -222,7 +236,7 @@ Settings: Quality=90, Target Height=1800px
 --- DÉTAIL PAR FICHIER ---
 ✅ BD1.cbz : 85.12 Mo -> 42.10 Mo (-50.5%)
 ⏭️  BD2.cbz : 12.05 Mo -> 12.05 Mo (pas de gain)
-❌ BD3.pdf : Image corrompue ou dimension invalide
+❌ BD3.pdf : Échec du décodage de l'image (fichier peut-être corrompu)
 
 =====================================================
 📊 RÉSUMÉ GLOBAL
@@ -267,6 +281,7 @@ Taille originale : 119.4 Mo → Taille finale : 28.3 Mo
   - **PDF** : Extraction avancée via `lopdf` avec gestion ICC et SMask.
   - **EPUB** : Extraction basée sur le manifeste de ressources.
 - **Multi-threading** : Rayon pour un parallélisme à haute efficacité.
+- **Localisation** : `fluent-templates` (système de ressources Mozilla Fluent).
 
 ## 📄 Détails du Support PDF
 
@@ -291,7 +306,7 @@ Taille originale : 119.4 Mo → Taille finale : 28.3 Mo
 
 ```
 cargo build --release
-strip target/release/RustyLibraryShrinker #Linux only
-cargo doc --no-deps #generate doc
-cross build --target x86_64-unknown-linux-gnu --release #cross build depuis windows
+strip target/release/RustyLibraryShrinker # Linux uniquement
+cargo doc --no-deps                      # Générer la documentation technique interne en français
+cross build --target x86_64-unknown-linux-gnu --release # Cross-compilation depuis Windows
 ```
