@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["detect_type","find_by_glob","find_in_dir","main","print_final_summary"],"mod":["archive","image_utils","models","processor"]};

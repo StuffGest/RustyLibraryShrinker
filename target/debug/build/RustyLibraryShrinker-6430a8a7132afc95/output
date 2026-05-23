@@ -1,2 +1,0 @@
-cargo:rustc-link-lib=advapi32
-cargo:rustc-link-lib=user32

@@ -1,2 +1,0 @@
-createSrcSidebar('[["RustyLibraryShrinker",["",[["archive",[],["epub.rs","mod.rs","pdf.rs","zip_rar.rs"]]],["image_utils.rs","main.rs","models.rs","processor.rs"]]]]');
-//{"start":19,"fragment_lengths":[145]}

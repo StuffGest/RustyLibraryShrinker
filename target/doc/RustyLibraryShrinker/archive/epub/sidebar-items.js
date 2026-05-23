@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["extract_epub","save_epub_resource"]};

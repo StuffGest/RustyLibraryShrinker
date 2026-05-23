@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["encode_webp","finalize_image_save","process_jp2_image","process_single_image"]};

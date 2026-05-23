@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["extract_comic"],"mod":["epub","pdf","zip_rar"]};

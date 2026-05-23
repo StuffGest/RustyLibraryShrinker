@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["apply_alpha","decode_to_luma","decode_to_rgb","extract_pdf","extract_raw_stream","extract_smask","process_pdf_page_layers"]};
