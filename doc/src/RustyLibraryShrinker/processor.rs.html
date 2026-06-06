@@ -161,7 +161,7 @@
 <a href=#161 id=161 data-nosnippet>161</a>        <span class="kw">let </span>ext = path.extension().and_then(|e| e.to_str()).unwrap_or(<span class="string">""</span>).to_lowercase();
 <a href=#162 id=162 data-nosnippet>162</a>
 <a href=#163 id=163 data-nosnippet>163</a>        <span class="comment">// Si ce n'est pas une extension d'image supportée, on n'y touche pas, on le garde intact (ex: ComicInfo.xml)
-<a href=#164 id=164 data-nosnippet>164</a>        </span><span class="kw">if </span>!<span class="macro">matches!</span>(ext.as_str(), <span class="string">"jpg" </span>| <span class="string">"jpeg" </span>| <span class="string">"png" </span>| <span class="string">"bmp" </span>| <span class="string">"webp" </span>| <span class="string">"jp2"</span>) {
+<a href=#164 id=164 data-nosnippet>164</a>        </span><span class="kw">if </span>!<span class="macro">matches!</span>(ext.as_str(), <span class="string">"jpg" </span>| <span class="string">"jpeg" </span>| <span class="string">"png" </span>| <span class="string">"bmp" </span>| <span class="string">"webp" </span>| <span class="string">"jp2" </span>| <span class="string">"tif" </span>| <span class="string">"tiff" </span>| <span class="string">"gif" </span>| <span class="string">"ico" </span>| <span class="string">"ff"</span>) {
 <a href=#165 id=165 data-nosnippet>165</a>            <span class="kw">let _ </span>= s.send(<span class="prelude-val">Ok</span>(()));
 <a href=#166 id=166 data-nosnippet>166</a>            <span class="kw">return</span>;
 <a href=#167 id=167 data-nosnippet>167</a>        }
