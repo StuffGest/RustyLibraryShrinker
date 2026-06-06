@@ -22,7 +22,7 @@ cli-label-remaining = Remaining
 # UI Messages & Logs
 msg-log-start = 🚀 Starting RustyLibraryShrinker
 msg-no-files-found = No files found.
-msg-start-processing = RustyLibraryShrinker: { $count } file(s) to process
+msg-start-processing = RustyLibraryShrinker - v{$version} : { $count } file(s) to process
 msg-image-skipped = IMAGE SKIPPED
 msg-reason = Reason
 msg-reason-decode = Failed to decode image (file might be corrupted)

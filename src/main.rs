@@ -118,6 +118,7 @@ fn main() -> Result<()> {
 
     let mut start_args = HashMap::new();
     start_args.insert("count".to_string(), FluentValue::from(files.len()));
+    start_args.insert("version".to_string(), FluentValue::from(env!("CARGO_PKG_VERSION")));
     println!("🚀 {}", tr("msg-start-processing", lang, Some(&start_args)));
     println!("-----------------------------------------------------");
 
