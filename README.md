@@ -12,7 +12,7 @@
 - ✅ **Massive parallelism** - Concurrently processes multiple files AND multiple images within each file (nested Rayon parallelism).
 - ✅ **Resource control** - Ability to limit the maximum number of threads using the `--threads` option.
 - ✅ **Multi-format support** - Handles EPUB, CBR (RAR), CBZ (ZIP), and PDF files with automatic format detection.
-- ✅ **Advanced PDF Support** - Direct extraction of embedded images (JPEG, PNG, JP2, CMYK) with full management of **SMasks (transparency)** and **ICC** profiles.
+- ✅ **Advanced PDF Support** - Direct extraction of embedded images (JPEG, PNG, JP2, CMYK, TIFF, GIF, FF, ICO) with full management of **SMasks (transparency)** and **ICC** profiles.
 - ✅ **EPUB Support** - Intelligent extraction respecting the internal order of the resource manifest.
 - ✅ **Internationalization (i18n)** - User interface, progress bars, logs, and command-line help documentation fully localized in French and English.
 - ✅ **Automatic folder processing** - Processes all comic book files in a directory by default.

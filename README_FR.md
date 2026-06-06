@@ -12,7 +12,7 @@
 - ✅ **Parallélisme massif** - Traite simultanément plusieurs fichiers ET plusieurs images à l'intérieur de chaque fichier (parallélisme Rayon imbriqué).
 - ✅ **Contrôle des ressources** - Possibilité de limiter le nombre de threads maximum via l'option `--threads`.
 - ✅ **Support multi-format** - Gère les fichiers EPUB, CBR (RAR), CBZ (ZIP) et PDF avec détection automatique du format.
-- ✅ **Support PDF Avancé** - Extraction directe des images intégrées (JPEG, PNG, JP2, CMYK) avec gestion des **SMasks (transparence)** et des profils **ICC**.
+- ✅ **Support PDF Avancé** - Extraction directe des images intégrées (JPEG, PNG, JP2, CMYK, TIFF, GIF, FF, ICO) avec gestion des **SMasks (transparence)** et des profils **ICC**.
 - ✅ **Support EPUB** - Extraction intelligente respectant l'ordre interne du manifeste.
 - ✅ **Internationalisation (i18n)** - Interface utilisateur, barres de progression, logs et documentation d'aide de la ligne de commande entièrement localisés en Français et Anglais.
 - ✅ **Traitement automatique de dossiers** - Traite par défaut tous les fichiers de BD dans un répertoire.
