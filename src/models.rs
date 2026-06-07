@@ -8,6 +8,7 @@
 use clap::{Parser, ValueEnum};
 use std::path::PathBuf;
 use std::collections::HashMap;
+use std::borrow::Cow;
 use fluent_templates::{static_loader, fluent_bundle::FluentValue, Loader};
 
 // Liste des langues réellement supportées par l'application
@@ -23,7 +24,7 @@ static_loader! {
 }
 
 /// Traduit une clé Fluent avec des arguments optionnels et une langue dynamique
-pub fn tr(key: &str, lang: &str, args: Option<&HashMap<String, FluentValue>>) -> String {
+pub fn tr(key: &str, lang: &str, args: Option<&HashMap<Cow<'static, str>, FluentValue>>) -> String {
     // Vérification de sécurité : si la langue n'est pas supportée, on force le fallback
     let safe_lang = if SUPPORTED_LANGS.contains(&lang) { lang } else { DEFAULT_LANG };
     let lang_id: fluent_templates::LanguageIdentifier = safe_lang.parse().unwrap_or_else(|_| DEFAULT_LANG.parse().unwrap());

@@ -116,9 +116,9 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    let mut start_args = HashMap::new();
-    start_args.insert("count".to_string(), FluentValue::from(files.len()));
-    start_args.insert("version".to_string(), FluentValue::from(env!("CARGO_PKG_VERSION")));
+    let mut start_args: HashMap<std::borrow::Cow<'static, str>, FluentValue> = HashMap::new();
+    start_args.insert(std::borrow::Cow::Borrowed("count"), FluentValue::from(files.len()));
+    start_args.insert(std::borrow::Cow::Borrowed("version"), FluentValue::from(env!("CARGO_PKG_VERSION")));
     println!("🚀 {}", tr("msg-start-processing", lang, Some(&start_args)));
     println!("-----------------------------------------------------");
 
