@@ -1,26 +1,29 @@
 //! Extraction et traitement des images au sein des fichiers PDF.
 //!
 //! Ce module permet de parcourir un document PDF, de charger dynamiquement la bibliothèque
-//! native Pdfium (`pdfium.dll` sous Windows, `libpdfium.so` sous Linux), et de convertir
-//! chaque page en image PNG haute définition.
+//! native Pdfium embarquée dans l'exécutable, et de convertir chaque page en image PNG.
 //!
 //! L'accès à la bibliothèque FFI est entièrement sécurisé par un Mutex global afin
 //! de garantir la stabilité de l'application lors de traitements multi-threadés.
 
 use anyhow::{Result, Context};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::ffi::CString;
 use std::sync::Mutex;
+use std::fs::File;
+use std::io::Write;
 use once_cell::sync::Lazy;
 use libc::{c_int, c_void, c_char};
+
+// Inclusion des binaires natifs directement dans l'exécutable à la compilation
+const PDFIUM_DLL_BYTES: &[u8] = include_bytes!("../../lib/pdfium.dll");
+const PDFIUM_SO_BYTES: &[u8] = include_bytes!("../../lib/libpdfium.so");
 
 // =========================================================================
 // STRUCTURES ET ENCAPSULATION SÉCURISÉE (THREAD-SAFE)
 // =========================================================================
 
 /// Enveloppe de sécurité autour du pointeur brut de la bibliothèque partagée (`*mut c_void`).
-/// Permet d'indiquer explicitement au compilateur Rust que le handle peut être partagé
-/// et transféré entre les threads en toute sécurité sous couvert du Mutex global.
 #[allow(dead_code)]
 struct LibraryHandle(*mut c_void);
 unsafe impl Send for LibraryHandle {}
@@ -70,17 +73,41 @@ unsafe extern "C" {
     fn dlclose(handle: *mut c_void) -> c_int;
 }
 
-/// Charge l'instance de Pdfium adaptée au système d'exploitation hôte.
+/// Extrait les octets inclus en mémoire dans un fichier temporaire sur le disque.
+///
+/// # Paramètres
+/// * `bytes` - Le slice d'octets de la bibliothèque native stocké en mémoire RAM.
+/// * `filename` - Le nom du fichier cible à créer dans le répertoire temporaire.
+fn extract_embedded_lib(bytes: &[u8], filename: &str) -> Result<PathBuf> {
+    let mut temp_path = std::env::temp_dir();
+    // Utilisation d'un sous-dossier propre à l'application pour éviter les collisions
+    temp_path.push("RustyLibraryShrinker_cache");
+    std::fs::create_dir_all(&temp_path)?;
+    temp_path.push(filename);
+
+    // On n'écrit le fichier que s'il n'existe pas déjà ou si sa taille diffère (optimisation)
+    if !temp_path.exists() || std::fs::metadata(&temp_path)?.len() != bytes.len() as u64 {
+        let mut file = File::create(&temp_path).context("Impossible de créer le fichier d'extraction temporaire")?;
+        file.write_all(bytes).context("Échec d'écriture des octets de la bibliothèque embarquée")?;
+        file.flush()?;
+    }
+    Ok(temp_path)
+}
+
+/// Charge l'instance de Pdfium adaptée au système d'exploitation hôte depuis la mémoire embarquée.
 ///
 /// # Retour
-/// * `Result<(LibraryHandle, PdfiumFunctions)>` - Le handle système de la ressource et la table des fonctions initialisées.
+/// * `Result<(LibraryHandle, PdfiumFunctions)>` - Le handle système et la table des fonctions initialisées.
 unsafe fn load_pdfium_platform() -> Result<(LibraryHandle, PdfiumFunctions)> {
     #[cfg(target_os = "windows")]
     {
-        let dll_name = CString::new("pdfium.dll").unwrap();
+        let target_path = extract_embedded_lib(PDFIUM_DLL_BYTES, "pdfium.dll")?;
+        let path_str = target_path.to_string_lossy();
+        let dll_name = CString::new(path_str.as_ref()).unwrap();
+
         let handle = unsafe { LoadLibraryA(dll_name.as_ptr()) };
         if handle.is_null() {
-            return Err(anyhow::anyhow!("Le fichier 'pdfium.dll' est introuvable à côté de l'exécutable Windows."));
+            return Err(anyhow::anyhow!("Échec du chargement de la DLL extraite à l'emplacement : {}", path_str));
         }
         let get_proc = |name: &str| {
             let c_name = CString::new(name).unwrap();
@@ -92,14 +119,13 @@ unsafe fn load_pdfium_platform() -> Result<(LibraryHandle, PdfiumFunctions)> {
 
     #[cfg(target_os = "linux")]
     {
-        let so_name = CString::new("./libpdfium.so").unwrap();
-        let mut handle = unsafe { dlopen(so_name.as_ptr(), 1) }; // 1 = RTLD_LAZY
+        let target_path = extract_embedded_lib(PDFIUM_SO_BYTES, "libpdfium.so")?;
+        let path_str = target_path.to_string_lossy();
+        let so_name = CString::new(path_str.as_ref()).unwrap();
+
+        let handle = unsafe { dlopen(so_name.as_ptr(), 1) }; // 1 = RTLD_LAZY
         if handle.is_null() {
-            let fallback_name = CString::new("libpdfium.so").unwrap();
-            handle = unsafe { dlopen(fallback_name.as_ptr(), 1) };
-        }
-        if handle.is_null() {
-            return Err(anyhow::anyhow!("Le fichier 'libpdfium.so' est introuvable (chemin local ou /usr/lib)."));
+            return Err(anyhow::anyhow!("Échec du chargement du .so extrait à l'emplacement : {}", path_str));
         }
         let get_proc = |name: &str| {
             let c_name = CString::new(name).unwrap();
@@ -130,7 +156,6 @@ where
         addr
     };
 
-    // On vérifie le symbole de fermeture avant la construction pour éviter le warning de non-nullité
     let mut close_doc_ptr = get_proc("FPDF_CloseDocument");
     if close_doc_ptr.is_null() {
         close_doc_ptr = load("FPDF_CloseDocument");
@@ -187,22 +212,13 @@ static PDFIUM_ENGINE: Lazy<Option<(LibraryHandle, PdfiumFunctions)>> = Lazy::new
 
 /// Parcourt un document PDF et extrait chaque page sous forme d'image PNG haute résolution.
 ///
-/// Cette méthode est entièrement thread-safe et peut être invoquée simultanément
-/// depuis plusieurs threads (via Rayon, par exemple).
-///
 /// # Paramètres
 /// * `pdf_path` - Le chemin d'accès système vers le fichier `.pdf` à traiter.
 /// * `temp_dir` - Le dossier temporaire cible dans lequel enregistrer les images PNG générées.
-///
-/// # Erreurs
-/// Renvoie une erreur si la bibliothèque Pdfium ne peut pas être chargée, si le document
-/// est corrompu/verrouillé, ou si l'écriture des fichiers PNG échoue sur le support disque.
 pub fn extract_pdf(pdf_path: &Path, temp_dir: &Path) -> Result<()> {
-    // 1. Acquisition sécurisée du verrou global pour isoler le thread courant
     let _lock = PDFIUM_MUTEX.lock().map_err(|_| anyhow::anyhow!("Le verrou de synchronisation Pdfium a été corrompu."))?;
 
-    // 2. Extraction du moteur unique de rendu
-    let (_, fns) = PDFIUM_ENGINE.as_ref().context("Impossible de charger ou d'initialiser le moteur Pdfium natif.")?;
+    let (_, fns) = PDFIUM_ENGINE.as_ref().context("Impossible de charger ou d'initialiser le moteur Pdfium embarqué.")?;
 
     let path_str = pdf_path.to_string_lossy();
     let c_path = CString::new(path_str.as_ref()).context("Erreur d'encodage du chemin du fichier PDF.")?;
@@ -224,7 +240,6 @@ pub fn extract_pdf(pdf_path: &Path, temp_dir: &Path) -> Result<()> {
             let orig_width = (fns.fpdf_get_page_width_f)(page);
             let orig_height = (fns.fpdf_get_page_height_f)(page);
 
-            // Protection élémentaire contre les divisions par zéro sur documents malformés
             if orig_height <= 0.0 || orig_width <= 0.0 {
                 let _ = (fns.fpdf_close_page)(page);
                 continue;
@@ -246,7 +261,6 @@ pub fn extract_pdf(pdf_path: &Path, temp_dir: &Path) -> Result<()> {
                     let bgra_slice = std::slice::from_raw_parts(buffer_ptr as *const u8, buffer_size);
                     let mut rgba_data = vec![0u8; buffer_size];
 
-                    // Transposition rapide de l'espace de couleur BGRA (Pdfium) vers RGBA (Crate Image)
                     for chunk_idx in (0..buffer_size).step_by(4) {
                         if chunk_idx + 3 < buffer_size {
                             rgba_data[chunk_idx]     = bgra_slice[chunk_idx + 2];
