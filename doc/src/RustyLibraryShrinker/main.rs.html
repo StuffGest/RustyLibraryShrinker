@@ -116,9 +116,9 @@
 <a href=#116 id=116 data-nosnippet>116</a>        <span class="kw">return </span><span class="prelude-val">Ok</span>(());
 <a href=#117 id=117 data-nosnippet>117</a>    }
 <a href=#118 id=118 data-nosnippet>118</a>
-<a href=#119 id=119 data-nosnippet>119</a>    <span class="kw">let </span><span class="kw-2">mut </span>start_args = HashMap::new();
-<a href=#120 id=120 data-nosnippet>120</a>    start_args.insert(<span class="string">"count"</span>.to_string(), FluentValue::from(files.len()));
-<a href=#121 id=121 data-nosnippet>121</a>    start_args.insert(<span class="string">"version"</span>.to_string(), FluentValue::from(<span class="macro">env!</span>(<span class="string">"CARGO_PKG_VERSION"</span>)));
+<a href=#119 id=119 data-nosnippet>119</a>    <span class="kw">let </span><span class="kw-2">mut </span>start_args: HashMap&lt;std::borrow::Cow&lt;<span class="lifetime">'static</span>, str&gt;, FluentValue&gt; = HashMap::new();
+<a href=#120 id=120 data-nosnippet>120</a>    start_args.insert(std::borrow::Cow::Borrowed(<span class="string">"count"</span>), FluentValue::from(files.len()));
+<a href=#121 id=121 data-nosnippet>121</a>    start_args.insert(std::borrow::Cow::Borrowed(<span class="string">"version"</span>), FluentValue::from(<span class="macro">env!</span>(<span class="string">"CARGO_PKG_VERSION"</span>)));
 <a href=#122 id=122 data-nosnippet>122</a>    <span class="macro">println!</span>(<span class="string">"🚀 {}"</span>, tr(<span class="string">"msg-start-processing"</span>, lang, <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>start_args)));
 <a href=#123 id=123 data-nosnippet>123</a>    <span class="macro">println!</span>(<span class="string">"-----------------------------------------------------"</span>);
 <a href=#124 id=124 data-nosnippet>124</a>

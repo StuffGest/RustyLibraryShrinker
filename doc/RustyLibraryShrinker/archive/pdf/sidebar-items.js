@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["apply_alpha","decode_to_luma","decode_to_rgb","extract_pdf","extract_raw_stream","extract_smask","process_pdf_page_layers"]};
+window.SIDEBAR_ITEMS = {"constant":["PDFIUM_DLL_BYTES","PDFIUM_SO_BYTES"],"fn":["FreeLibrary","GetProcAddress","LoadLibraryA","build_functions_struct","extract_embedded_lib","extract_pdf","load_pdfium_platform"],"static":["PDFIUM_ENGINE","PDFIUM_MUTEX"],"struct":["LibraryHandle","PdfiumFunctions"]};
